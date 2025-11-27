@@ -1,0 +1,178 @@
+"""
+Project model for saving plant configurations.
+
+A Project represents a saved plant configuration that can be
+loaded and modified for repeated simulations.
+"""
+from datetime import datetime
+from typing import Dict, Any, Optional
+from pydantic import BaseModel, Field
+import uuid
+
+
+class FeedSourceParams(BaseModel):
+    """Feed source parameters."""
+
+    flow_m3_h: float = Field(..., gt=0, description="Volumetric flow in m³/h")
+    ts_percent: float = Field(..., gt=0, le=100, description="Total solids percentage")
+    temperature_C: float = Field(default=20.0, description="Temperature in °C")
+
+
+class PolymerConditionerParams(BaseModel):
+    """Polymer conditioner parameters."""
+
+    jar_test_optimum_ppm: float = Field(..., ge=0, description="Jar test optimum dose in ppm")
+    shear_factor: float = Field(default=1.2, gt=0, description="Equipment shear factor")
+    safety_factor: float = Field(default=1.1, gt=0, description="Safety margin factor")
+
+
+class DewateringUnitParams(BaseModel):
+    """Dewatering unit parameters."""
+
+    max_flow_m3_h: float = Field(default=100.0, gt=0, description="Maximum flow capacity")
+    capture_rate: float = Field(default=0.95, gt=0, le=1, description="Solids capture rate")
+    cake_dryness_percent: float = Field(default=23.0, gt=0, le=100, description="Target cake dryness")
+    polymer_split_cake: float = Field(default=0.3, ge=0, le=1, description="Polymer fraction to cake")
+
+
+class PlantSettings(BaseModel):
+    """Plant operating settings."""
+
+    polymer_price_per_kg: Optional[float] = Field(None, ge=0, description="Polymer cost per kg")
+    operating_hours_per_day: float = Field(default=24.0, gt=0, le=24, description="Operating hours")
+    currency: str = Field(default="USD", description="Currency for cost display")
+
+
+class PlantConfiguration(BaseModel):
+    """Complete plant configuration."""
+
+    feed_source: Dict[str, Any] = Field(..., description="Feed source configuration")
+    polymer_conditioner: Dict[str, Any] = Field(..., description="Polymer conditioner configuration")
+    dewatering_unit: Dict[str, Any] = Field(..., description="Dewatering unit configuration")
+    settings: Dict[str, Any] = Field(default_factory=dict, description="Plant settings")
+
+    @classmethod
+    def from_params(
+        cls,
+        feed: FeedSourceParams,
+        polymer: PolymerConditionerParams,
+        dewatering: DewateringUnitParams,
+        settings: Optional[PlantSettings] = None,
+    ) -> "PlantConfiguration":
+        """Create configuration from parameter objects."""
+        return cls(
+            feed_source={"parameters": feed.model_dump()},
+            polymer_conditioner={"parameters": polymer.model_dump()},
+            dewatering_unit={"parameters": dewatering.model_dump()},
+            settings=settings.model_dump() if settings else {},
+        )
+
+    def to_solver_format(self) -> Dict[str, Any]:
+        """Convert to format expected by solve_plant."""
+        return {
+            "feed_source": self.feed_source,
+            "polymer_conditioner": self.polymer_conditioner,
+            "dewatering_unit": self.dewatering_unit,
+            "settings": self.settings,
+        }
+
+
+class Project(BaseModel):
+    """Project model for saving plant configurations."""
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique project ID")
+    name: str = Field(..., min_length=1, max_length=100, description="Project name")
+    description: Optional[str] = Field(None, max_length=500, description="Project description")
+    plant_configuration: PlantConfiguration
+    jar_test_id: Optional[str] = Field(None, description="Linked jar test ID")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "name": "Sabesp Demo Plant",
+                "description": "Demo configuration for Sabesp presentation",
+                "plant_configuration": {
+                    "feed_source": {
+                        "parameters": {
+                            "flow_m3_h": 100.0,
+                            "ts_percent": 2.8,
+                            "temperature_C": 20.0,
+                        }
+                    },
+                    "polymer_conditioner": {
+                        "parameters": {
+                            "jar_test_optimum_ppm": 15.0,
+                            "shear_factor": 1.2,
+                            "safety_factor": 1.1,
+                        }
+                    },
+                    "dewatering_unit": {
+                        "parameters": {
+                            "max_flow_m3_h": 150.0,
+                            "capture_rate": 0.95,
+                            "cake_dryness_percent": 23.0,
+                            "polymer_split_cake": 0.3,
+                        }
+                    },
+                    "settings": {
+                        "polymer_price_per_kg": 5.0,
+                        "operating_hours_per_day": 24.0,
+                    },
+                },
+                "jar_test_id": "JT-2024-001",
+            }
+        }
+    }
+
+
+class ProjectCreate(BaseModel):
+    """Schema for creating a new project."""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    plant_configuration: PlantConfiguration
+    jar_test_id: Optional[str] = None
+
+
+class ProjectUpdate(BaseModel):
+    """Schema for updating a project."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    plant_configuration: Optional[PlantConfiguration] = None
+    jar_test_id: Optional[str] = None
+
+
+def get_default_plant_configuration() -> PlantConfiguration:
+    """Get a default plant configuration for new projects."""
+    return PlantConfiguration(
+        feed_source={
+            "parameters": {
+                "flow_m3_h": 100.0,
+                "ts_percent": 3.0,
+                "temperature_C": 20.0,
+            }
+        },
+        polymer_conditioner={
+            "parameters": {
+                "jar_test_optimum_ppm": 15.0,
+                "shear_factor": 1.2,
+                "safety_factor": 1.1,
+            }
+        },
+        dewatering_unit={
+            "parameters": {
+                "max_flow_m3_h": 150.0,
+                "capture_rate": 0.95,
+                "cake_dryness_percent": 23.0,
+                "polymer_split_cake": 0.3,
+            }
+        },
+        settings={
+            "polymer_price_per_kg": None,
+            "operating_hours_per_day": 24.0,
+        },
+    )
