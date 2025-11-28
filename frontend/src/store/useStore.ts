@@ -182,8 +182,12 @@ interface PlantState {
   jarTests: JarTest[];
   selectedJarTestId: string | null;
 
-  // TCO Scenario comparison
-  savedScenario: ScenarioSnapshot | null;
+  // TCO Scenario comparison (two slots for A/B comparison)
+  savedScenarios: {
+    A: ScenarioSnapshot | null;
+    B: ScenarioSnapshot | null;
+  };
+  activeComparisonSlot: "A" | "B";  // Which slot to compare current against
 
   // Actions
   initializeDefaultPlant: () => void;
@@ -211,9 +215,10 @@ interface PlantState {
   clearValidation: () => void;
 
   // TCO Scenario comparison actions
-  saveCurrentAsScenario: (name: string) => void;
-  clearSavedScenario: () => void;
-  swapScenarios: () => void;
+  saveScenarioToSlot: (slot: "A" | "B", name: string) => void;
+  clearScenarioSlot: (slot: "A" | "B") => void;
+  setActiveComparisonSlot: (slot: "A" | "B") => void;
+  swapScenarioSlots: () => void;
 }
 
 export const useStore = create<PlantState>()(
@@ -231,7 +236,8 @@ export const useStore = create<PlantState>()(
     isValidating: false,
     jarTests: [],
     selectedJarTestId: null,
-    savedScenario: null,
+    savedScenarios: { A: null, B: null },
+    activeComparisonSlot: "A",
 
     // Initialize default plant layout
     initializeDefaultPlant: () =>
@@ -560,39 +566,46 @@ export const useStore = create<PlantState>()(
         state.validationWarnings = [];
       }),
 
-    // Save current simulation as a scenario for comparison
-    saveCurrentAsScenario: (name) =>
+    // Save current simulation to a specific slot (A or B)
+    saveScenarioToSlot: (slot, name) =>
       set((state) => {
         if (state.simulationResult) {
-          state.savedScenario = {
+          state.savedScenarios[slot] = {
             name,
             timestamp: Date.now(),
             settings: { ...state.plantConfiguration.settings },
             result: state.simulationResult,
           };
+          // Auto-switch to compare against the newly saved slot
+          state.activeComparisonSlot = slot;
         }
       }),
 
-    // Clear the saved scenario
-    clearSavedScenario: () =>
+    // Clear a specific scenario slot
+    clearScenarioSlot: (slot) =>
       set((state) => {
-        state.savedScenario = null;
+        state.savedScenarios[slot] = null;
+        // If we cleared the active slot, switch to the other if available
+        if (state.activeComparisonSlot === slot) {
+          const otherSlot = slot === "A" ? "B" : "A";
+          if (state.savedScenarios[otherSlot]) {
+            state.activeComparisonSlot = otherSlot;
+          }
+        }
       }),
 
-    // Swap current and saved scenarios
-    // This saves the current simulation as the new baseline for comparison
-    // The old baseline is discarded since we can't restore plant state from a snapshot
-    swapScenarios: () =>
+    // Set which slot to compare current results against
+    setActiveComparisonSlot: (slot) =>
       set((state) => {
-        if (state.savedScenario && state.simulationResult) {
-          // Save current as the new baseline
-          state.savedScenario = {
-            name: state.savedScenario.name === "Current" ? "Baseline" : "Current",
-            timestamp: Date.now(),
-            settings: { ...state.plantConfiguration.settings },
-            result: state.simulationResult,
-          };
-        }
+        state.activeComparisonSlot = slot;
+      }),
+
+    // Swap the contents of slots A and B
+    swapScenarioSlots: () =>
+      set((state) => {
+        const temp = state.savedScenarios.A;
+        state.savedScenarios.A = state.savedScenarios.B;
+        state.savedScenarios.B = temp;
       }),
   }))
 );
@@ -607,7 +620,8 @@ export const useIsSimulating = () => useStore((state) => state.isSimulating);
 export const useCurrentProject = () => useStore((state) => state.currentProject);
 export const useJarTestsState = () => useStore((state) => state.jarTests);
 export const useSelectedJarTestId = () => useStore((state) => state.selectedJarTestId);
-export const useSavedScenario = () => useStore((state) => state.savedScenario);
+export const useSavedScenarios = () => useStore((state) => state.savedScenarios);
+export const useActiveComparisonSlot = () => useStore((state) => state.activeComparisonSlot);
 
 // Validation selectors
 export const useValidationErrors = () => useStore((state) => state.validationErrors);

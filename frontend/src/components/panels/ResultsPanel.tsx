@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { useStore, useSavedScenario, usePlantConfiguration } from "../../store/useStore";
+import { useStore, useSavedScenarios, useActiveComparisonSlot, usePlantConfiguration } from "../../store/useStore";
 import { formatCurrency } from "../../lib/utils";
 import { Tooltip } from "../ui/Tooltip";
 
@@ -21,15 +21,14 @@ function TCOCard({
   value,
   currency,
   highlight = false,
-  showDash = false,
+  isMissing = false,
 }: {
   label: string;
   value: number;
   currency: string;
   highlight?: boolean;
-  showDash?: boolean;
+  isMissing?: boolean;
 }) {
-  const displayValue = value === 0 && showDash;
   return (
     <div
       className={`p-2 rounded-lg border ${
@@ -42,7 +41,7 @@ function TCOCard({
         {label}
       </h5>
       <p className={`text-sm font-bold ${highlight ? "text-emerald-700" : "text-gray-700"}`}>
-        {displayValue ? (
+        {isMissing ? (
           <Tooltip content={`${label} not calculated: missing required inputs`}>
             <span className="text-gray-400 cursor-help">—</span>
           </Tooltip>
@@ -61,12 +60,17 @@ export function ResultsPanel() {
   const simulationResult = useStore((state) => state.simulationResult);
   const isSimulating = useStore((state) => state.isSimulating);
   const plantConfiguration = usePlantConfiguration();
-  const savedScenario = useSavedScenario();
-  const saveCurrentAsScenario = useStore((state) => state.saveCurrentAsScenario);
-  const clearSavedScenario = useStore((state) => state.clearSavedScenario);
-  const swapScenarios = useStore((state) => state.swapScenarios);
+  const savedScenarios = useSavedScenarios();
+  const activeComparisonSlot = useActiveComparisonSlot();
+  const saveScenarioToSlot = useStore((state) => state.saveScenarioToSlot);
+  const clearScenarioSlot = useStore((state) => state.clearScenarioSlot);
+  const setActiveComparisonSlot = useStore((state) => state.setActiveComparisonSlot);
   const [isExpanded, setIsExpanded] = useState(true);
   const [tcoPeriod, setTcoPeriod] = useState<TCOPeriod>("month");
+
+  // Active scenario for comparison
+  const activeScenario = savedScenarios[activeComparisonSlot];
+  const hasAnyScenario = savedScenarios.A !== null || savedScenarios.B !== null;
 
   const currency = plantConfiguration.settings.currency || "BRL";
 
@@ -382,6 +386,14 @@ export function ResultsPanel() {
             /TCO|chemicals|filtration|sludge|logistics|polymer.*price|disposal|backwash/i.test(w)
           );
 
+          // Determine which pillars are missing based on warnings
+          const missingPillars = {
+            chemicals: tcoWarnings.some(w => /polymer.*price|chemicals/i.test(w)),
+            filtration: tcoWarnings.some(w => /backwash|filtration|filter/i.test(w)),
+            sludge: tcoWarnings.some(w => /disposal|sludge/i.test(w)),
+            logistics: tcoWarnings.some(w => /storage|handling|logistics/i.test(w)),
+          };
+
           return (
             <div className="pt-4 border-t border-gray-200 space-y-4">
               {/* Header with currency badge */}
@@ -392,14 +404,28 @@ export function ResultsPanel() {
                     {currency}
                   </span>
                 </div>
-                <button
-                  onClick={() => saveCurrentAsScenario("Current")}
-                  className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                  title="Save for comparison"
-                >
-                  <Save className="w-3 h-3" />
-                  Save Scenario
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => saveScenarioToSlot("A", "Scenario A")}
+                    className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                      savedScenarios.A ? "text-emerald-600 hover:bg-emerald-50" : "text-blue-600 hover:bg-blue-50"
+                    }`}
+                    title={savedScenarios.A ? "Overwrite Scenario A" : "Save as Scenario A"}
+                  >
+                    <Save className="w-3 h-3" />
+                    {savedScenarios.A ? "A" : "Save A"}
+                  </button>
+                  <button
+                    onClick={() => saveScenarioToSlot("B", "Scenario B")}
+                    className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                      savedScenarios.B ? "text-violet-600 hover:bg-violet-50" : "text-blue-600 hover:bg-blue-50"
+                    }`}
+                    title={savedScenarios.B ? "Overwrite Scenario B" : "Save as Scenario B"}
+                  >
+                    <Save className="w-3 h-3" />
+                    {savedScenarios.B ? "B" : "Save B"}
+                  </button>
+                </div>
               </div>
 
               {/* TCO Warnings Banner */}
@@ -430,10 +456,10 @@ export function ResultsPanel() {
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                       <TCOCard label="Total" value={kpis.tco_per_1000m3.total} currency={currency} highlight />
-                      <TCOCard label="Chemicals" value={kpis.tco_per_1000m3.chemicals} currency={currency} showDash />
-                      <TCOCard label="Filtration" value={kpis.tco_per_1000m3.filtration} currency={currency} showDash />
-                      <TCOCard label="Sludge" value={kpis.tco_per_1000m3.sludge} currency={currency} showDash />
-                      <TCOCard label="Logistics" value={kpis.tco_per_1000m3.logistics} currency={currency} showDash />
+                      <TCOCard label="Chemicals" value={kpis.tco_per_1000m3.chemicals} currency={currency} isMissing={missingPillars.chemicals} />
+                      <TCOCard label="Filtration" value={kpis.tco_per_1000m3.filtration} currency={currency} isMissing={missingPillars.filtration} />
+                      <TCOCard label="Sludge" value={kpis.tco_per_1000m3.sludge} currency={currency} isMissing={missingPillars.sludge} />
+                      <TCOCard label="Logistics" value={kpis.tco_per_1000m3.logistics} currency={currency} isMissing={missingPillars.logistics} />
                     </div>
                   </div>
 
@@ -473,78 +499,108 @@ export function ResultsPanel() {
                       return (
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                           <TCOCard label="Total" value={tco.total} currency={currency} highlight />
-                          <TCOCard label="Chemicals" value={tco.chemicals} currency={currency} showDash />
-                          <TCOCard label="Filtration" value={tco.filtration} currency={currency} showDash />
-                          <TCOCard label="Sludge" value={tco.sludge} currency={currency} showDash />
-                          <TCOCard label="Logistics" value={tco.logistics} currency={currency} showDash />
+                          <TCOCard label="Chemicals" value={tco.chemicals} currency={currency} isMissing={missingPillars.chemicals} />
+                          <TCOCard label="Filtration" value={tco.filtration} currency={currency} isMissing={missingPillars.filtration} />
+                          <TCOCard label="Sludge" value={tco.sludge} currency={currency} isMissing={missingPillars.sludge} />
+                          <TCOCard label="Logistics" value={tco.logistics} currency={currency} isMissing={missingPillars.logistics} />
                         </div>
                       );
                     })()}
                   </div>
 
                   {/* Scenario Comparison */}
-                  {savedScenario && kpis.tco_per_1000m3 && (
+                  {hasAnyScenario && kpis.tco_per_1000m3 && (
                     <div className="pt-3 border-t border-gray-100">
                       <div className="flex items-center justify-between mb-2">
                         <div>
                           <h5 className="text-xs font-semibold text-gray-700">Scenario Comparison (per 1,000 m³)</h5>
-                          <div className="text-xs text-gray-500 mt-0.5">
-                            Saved: {new Date(savedScenario.timestamp).toLocaleDateString()} • {savedScenario.settings.currency} • {savedScenario.settings.operating_hours_per_day || 24}h/day
+                          {/* Slot selector tabs */}
+                          <div className="flex items-center gap-1 mt-1">
+                            {savedScenarios.A && (
+                              <button
+                                onClick={() => setActiveComparisonSlot("A")}
+                                className={`px-2 py-0.5 text-xs rounded ${
+                                  activeComparisonSlot === "A"
+                                    ? "bg-emerald-600 text-white"
+                                    : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                }`}
+                              >
+                                A: {new Date(savedScenarios.A.timestamp).toLocaleDateString()}
+                              </button>
+                            )}
+                            {savedScenarios.B && (
+                              <button
+                                onClick={() => setActiveComparisonSlot("B")}
+                                className={`px-2 py-0.5 text-xs rounded ${
+                                  activeComparisonSlot === "B"
+                                    ? "bg-violet-600 text-white"
+                                    : "bg-violet-100 text-violet-700 hover:bg-violet-200"
+                                }`}
+                              >
+                                B: {new Date(savedScenarios.B.timestamp).toLocaleDateString()}
+                              </button>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={swapScenarios}
-                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
-                            title="Replace saved baseline with current results"
-                          >
-                            <Save className="w-3 h-3" />
-                            Update Baseline
-                          </button>
-                          <button
-                            onClick={clearSavedScenario}
-                            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
-                          >
-                            <X className="w-3 h-3" />
-                            Clear
-                          </button>
+                          {activeScenario && (
+                            <button
+                              onClick={() => clearScenarioSlot(activeComparisonSlot)}
+                              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
+                              title={`Clear Scenario ${activeComparisonSlot}`}
+                            >
+                              <X className="w-3 h-3" />
+                              Clear {activeComparisonSlot}
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead className="sticky top-0 bg-white z-10">
-                            <tr className="bg-gray-50">
-                              <th className="px-2 py-1 text-left font-medium text-gray-600">Pillar</th>
-                              <th className="px-2 py-1 text-right font-medium text-gray-600">Saved</th>
-                              <th className="px-2 py-1 text-right font-medium text-gray-600">Current</th>
-                              <th className="px-2 py-1 text-right font-medium text-gray-600">Delta</th>
-                              <th className="px-2 py-1 text-right font-medium text-gray-600">%</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {(["chemicals", "filtration", "sludge", "logistics", "total"] as const).map((pillar) => {
-                              const savedVal = savedScenario.result.kpis.tco_per_1000m3?.[pillar] || 0;
-                              const currentVal = kpis.tco_per_1000m3?.[pillar] || 0;
-                              const delta = currentVal - savedVal;
-                              const pctChange = savedVal !== 0 ? (delta / savedVal) * 100 : 0;
-                              const isTotal = pillar === "total";
-                              return (
-                                <tr key={pillar} className={isTotal ? "font-semibold bg-gray-50" : ""}>
-                                  <td className="px-2 py-1 capitalize">{pillar}</td>
-                                  <td className="px-2 py-1 text-right">{formatCurrency(savedVal, currency)}</td>
-                                  <td className="px-2 py-1 text-right">{formatCurrency(currentVal, currency)}</td>
-                                  <td className={`px-2 py-1 text-right ${delta < 0 ? "text-emerald-600" : delta > 0 ? "text-red-600" : ""}`}>
-                                    {delta < 0 ? "−" : "+"}{formatCurrency(Math.abs(delta), currency)}
-                                  </td>
-                                  <td className={`px-2 py-1 text-right ${delta < 0 ? "text-emerald-600" : delta > 0 ? "text-red-600" : ""}`}>
-                                    {delta < 0 ? "−" : "+"}{Math.abs(pctChange).toFixed(1)}%
-                                  </td>
+                      {activeScenario ? (
+                        <>
+                          <div className="text-xs text-gray-500 mb-2">
+                            Comparing against {activeScenario.name} • {activeScenario.settings.currency} • {activeScenario.settings.operating_hours_per_day || 24}h/day
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead className="sticky top-0 bg-white z-10">
+                                <tr className="bg-gray-50">
+                                  <th className="px-2 py-1 text-left font-medium text-gray-600">Pillar</th>
+                                  <th className="px-2 py-1 text-right font-medium text-gray-600">{activeComparisonSlot}</th>
+                                  <th className="px-2 py-1 text-right font-medium text-gray-600">Current</th>
+                                  <th className="px-2 py-1 text-right font-medium text-gray-600">Delta</th>
+                                  <th className="px-2 py-1 text-right font-medium text-gray-600">%</th>
                                 </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {(["chemicals", "filtration", "sludge", "logistics", "total"] as const).map((pillar) => {
+                                  const savedVal = activeScenario.result.kpis.tco_per_1000m3?.[pillar] || 0;
+                                  const currentVal = kpis.tco_per_1000m3?.[pillar] || 0;
+                                  const delta = currentVal - savedVal;
+                                  const pctChange = savedVal !== 0 ? (delta / savedVal) * 100 : 0;
+                                  const isTotal = pillar === "total";
+                                  return (
+                                    <tr key={pillar} className={isTotal ? "font-semibold bg-gray-50" : ""}>
+                                      <td className="px-2 py-1 capitalize">{pillar}</td>
+                                      <td className="px-2 py-1 text-right">{formatCurrency(savedVal, currency)}</td>
+                                      <td className="px-2 py-1 text-right">{formatCurrency(currentVal, currency)}</td>
+                                      <td className={`px-2 py-1 text-right ${delta < 0 ? "text-emerald-600" : delta > 0 ? "text-red-600" : ""}`}>
+                                        {delta < 0 ? "−" : "+"}{formatCurrency(Math.abs(delta), currency)}
+                                      </td>
+                                      <td className={`px-2 py-1 text-right ${delta < 0 ? "text-emerald-600" : delta > 0 ? "text-red-600" : ""}`}>
+                                        {delta < 0 ? "−" : "+"}{Math.abs(pctChange).toFixed(1)}%
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-xs text-gray-500 italic">
+                          Select a scenario tab above to compare
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
