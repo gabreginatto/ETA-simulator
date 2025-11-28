@@ -15,9 +15,10 @@ describe("useStore", () => {
   describe("initializeDefaultPlant", () => {
     it("creates default nodes", () => {
       const state = useStore.getState();
-      expect(state.nodes).toHaveLength(3);
+      expect(state.nodes).toHaveLength(4);
       expect(state.nodes.map((n) => n.data.type)).toEqual([
         "feed",
+        "pump",
         "polymer",
         "dewatering",
       ]);
@@ -25,7 +26,7 @@ describe("useStore", () => {
 
     it("creates default edges", () => {
       const state = useStore.getState();
-      expect(state.edges).toHaveLength(2);
+      expect(state.edges).toHaveLength(3);
     });
 
     it("has default plant configuration", () => {

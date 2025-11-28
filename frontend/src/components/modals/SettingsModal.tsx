@@ -23,6 +23,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const currentProject = useStore((state) => state.currentProject);
 
   const [polymerPrice, setPolymerPrice] = useState<string>("");
+  const [electricityPrice, setElectricityPrice] = useState<string>("");
   const [currency, setCurrency] = useState<string>("USD");
   const [operatingHours, setOperatingHours] = useState<string>("24");
 
@@ -31,6 +32,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     if (isOpen) {
       const settings = plantConfiguration.settings;
       setPolymerPrice(settings.polymer_price_per_kg?.toString() || "5");
+      setElectricityPrice(settings.electricity_price_per_kwh?.toString() || "");
       setCurrency(settings.currency || "USD");
       setOperatingHours(settings.operating_hours_per_day?.toString() || "24");
     }
@@ -43,6 +45,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       ...plantConfiguration,
       settings: {
         polymer_price_per_kg: parseFloat(polymerPrice) || undefined,
+        electricity_price_per_kwh: electricityPrice ? parseFloat(electricityPrice) : undefined,
         currency,
         operating_hours_per_day: parseFloat(operatingHours) || 24,
       },
@@ -164,6 +167,25 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 placeholder="5.00"
               />
               <span className="text-slate-500">per kg</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Electricity Price
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500">{currencySymbol}</span>
+              <input
+                type="number"
+                value={electricityPrice}
+                onChange={(e) => setElectricityPrice(e.target.value)}
+                step="0.01"
+                min="0"
+                className="flex-1 px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="0.12"
+              />
+              <span className="text-slate-500">per kWh</span>
             </div>
           </div>
 

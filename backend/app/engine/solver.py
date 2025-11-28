@@ -20,6 +20,7 @@ from typing import Dict, Any, Optional, List
 
 from app.models.stream import Stream
 from app.engine.feed_source import make_feed_stream, validate_feed_parameters
+from app.engine.pump import simulate_pump
 from app.engine.polymer_conditioner import (
     apply_polymer,
     validate_polymer_parameters,
@@ -104,6 +105,7 @@ def solve_plant(
 
         # Settings
         polymer_price_per_kg = settings.get("polymer_price_per_kg")
+        electricity_price_per_kwh = settings.get("electricity_price_per_kwh")
         operating_hours_per_day = settings.get("operating_hours_per_day", 24.0)
 
         # ---------------------------------------------------------------------
@@ -156,10 +158,37 @@ def solve_plant(
         )
 
         # ---------------------------------------------------------------------
+        # Optional Pump
+        # ---------------------------------------------------------------------
+        stream_to_condition = feed
+        pump_power = 0.0
+        pump_out_stream = None
+
+        pump_section = plant_definition.get("transfer_pump")
+        if pump_section and "parameters" in pump_section:
+            pump_params = pump_section["parameters"]
+            head_m = pump_params.get("head_m", 20.0)
+            eff_pump = pump_params.get("efficiency_pump", 0.7)
+            eff_motor = pump_params.get("efficiency_motor", 0.9)
+            
+            # Total efficiency
+            total_eff = eff_pump * eff_motor
+            
+            pump_out_stream = simulate_pump(
+                stream=feed,
+                head_m=head_m,
+                efficiency=total_eff,
+                output_stream_id="pump_out"
+            )
+            
+            stream_to_condition = pump_out_stream
+            pump_power = getattr(pump_out_stream, "power_kW", 0.0)
+
+        # ---------------------------------------------------------------------
         # Apply polymer
         # ---------------------------------------------------------------------
         conditioned = apply_polymer(
-            feed=feed,
+            feed=stream_to_condition,
             jar_dose_ppm=jar_dose_ppm,
             shear_factor=shear_factor,
             safety_factor=safety_factor,
@@ -187,7 +216,9 @@ def solve_plant(
             cake=cake,
             liquid=liquid,
             polymer_price_per_kg=polymer_price_per_kg,
+            electricity_price_per_kwh=electricity_price_per_kwh,
             operating_hours_per_day=operating_hours_per_day,
+            pump_power_kW=pump_power,
         )
 
         # Add KPI-based warnings
@@ -203,6 +234,9 @@ def solve_plant(
             "cake": cake.to_dict(),
             "liquid": liquid.to_dict(),
         }
+        if pump_out_stream:
+            result["streams"]["pump_out"] = pump_out_stream.to_dict()
+            
         result["kpis"] = kpis
 
         # Remove duplicate warnings
@@ -326,5 +360,19 @@ def validate_plant_definition(plant_definition: Dict[str, Any]) -> List[Dict[str
                     f"Feed flow ({feed_flow} m³/h) exceeds unit capacity ({max_flow} m³/h)",
                     "warning"
                 ))
+
+    # Transfer pump validation (optional)
+    if "transfer_pump" in plant_definition and "parameters" in plant_definition.get("transfer_pump", {}):
+        params = plant_definition["transfer_pump"]["parameters"]
+        head_m = params.get("head_m")
+        eff_pump = params.get("efficiency_pump")
+        eff_motor = params.get("efficiency_motor")
+
+        if head_m is None or head_m <= 0:
+            errors.append(ValidationError("transfer_pump.parameters.head_m", "Pump head must be greater than 0"))
+        if eff_pump is None or eff_pump <= 0 or eff_pump > 1:
+            errors.append(ValidationError("transfer_pump.parameters.efficiency_pump", "Pump efficiency must be between 0 and 1"))
+        if eff_motor is None or eff_motor <= 0 or eff_motor > 1:
+            errors.append(ValidationError("transfer_pump.parameters.efficiency_motor", "Motor efficiency must be between 0 and 1"))
 
     return [e.to_dict() for e in errors]

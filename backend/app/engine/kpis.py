@@ -20,7 +20,9 @@ def compute_kpis(
     cake: Stream,
     liquid: Stream,
     polymer_price_per_kg: Optional[float] = None,
+    electricity_price_per_kwh: Optional[float] = None,
     operating_hours_per_day: float = 24.0,
+    pump_power_kW: float = 0.0,
 ) -> Dict[str, Any]:
     """
     Compute comprehensive KPIs for the dewatering process.
@@ -30,18 +32,13 @@ def compute_kpis(
         conditioned: Stream after polymer addition.
         cake: Dewatered cake output stream.
         liquid: Liquid (centrate/filtrate) output stream.
-        polymer_price_per_kg: Polymer unit cost (optional, for cost calculations).
+        polymer_price_per_kg: Polymer unit cost (optional).
+        electricity_price_per_kwh: Electricity unit cost (optional).
         operating_hours_per_day: Operating hours per day. Defaults to 24.0.
+        pump_power_kW: Power consumption of the pump in kW.
 
     Returns:
         Dictionary containing all calculated KPIs.
-
-    KPI Categories:
-        1. Polymer Metrics
-        2. Cake Metrics
-        3. Liquid Metrics
-        4. Mass Balance
-        5. Cost Metrics (if price provided)
     """
     kpis: Dict[str, Any] = {}
 
@@ -117,7 +114,7 @@ def compute_kpis(
     kpis["solids_capture_actual_percent"] = solids_capture_actual_percent
 
     # -------------------------------------------------------------------------
-    # 5. Cost Metrics (if polymer price provided)
+    # 5. Cost Metrics (Polymer)
     # -------------------------------------------------------------------------
     if polymer_price_per_kg is not None and polymer_price_per_kg > 0:
         polymer_cost_per_day = polymer_kg_per_day * polymer_price_per_kg
@@ -134,6 +131,27 @@ def compute_kpis(
         kpis["polymer_cost_per_month"] = None
         kpis["polymer_cost_per_year"] = None
         kpis["polymer_cost_per_tDS"] = None
+
+    # -------------------------------------------------------------------------
+    # 6. Energy Metrics
+    # -------------------------------------------------------------------------
+    kpis["pump_power_kW"] = pump_power_kW
+    energy_kwh_per_day = pump_power_kW * operating_hours_per_day
+    energy_kwh_per_month = energy_kwh_per_day * 30
+    kpis["energy_kwh_per_month"] = energy_kwh_per_month
+
+    if electricity_price_per_kwh is not None and electricity_price_per_kwh > 0:
+        energy_cost_per_day = energy_kwh_per_day * electricity_price_per_kwh
+        energy_cost_per_month = energy_cost_per_day * 30
+        energy_cost_per_year = energy_cost_per_day * 365
+        
+        kpis["energy_cost_per_day"] = energy_cost_per_day
+        kpis["energy_cost_per_month"] = energy_cost_per_month
+        kpis["energy_cost_per_year"] = energy_cost_per_year
+    else:
+        kpis["energy_cost_per_day"] = None
+        kpis["energy_cost_per_month"] = None
+        kpis["energy_cost_per_year"] = None
 
     return kpis
 
@@ -179,6 +197,20 @@ def format_kpis_for_display(kpis: Dict[str, Any]) -> Dict[str, str]:
     else:
         formatted["polymer_cost_per_day"] = "N/A (no price set)"
         formatted["polymer_cost_per_month"] = "N/A (no price set)"
+
+    # Energy metrics
+    formatted["pump_power_kW"] = f"{kpis.get('pump_power_kW', 0):.1f} kW"
+    formatted["energy_kwh_per_month"] = f"{kpis.get('energy_kwh_per_month', 0):,.0f} kWh/month"
+
+    energy_cost_day = kpis.get("energy_cost_per_day")
+    energy_cost_month = kpis.get("energy_cost_per_month")
+
+    if energy_cost_day is not None:
+        formatted["energy_cost_per_day"] = f"${energy_cost_day:,.2f}/day"
+        formatted["energy_cost_per_month"] = f"${energy_cost_month:,.2f}/month"
+    else:
+        formatted["energy_cost_per_day"] = "N/A (no price set)"
+        formatted["energy_cost_per_month"] = "N/A (no price set)"
 
     return formatted
 

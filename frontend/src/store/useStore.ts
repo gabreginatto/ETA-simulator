@@ -7,6 +7,7 @@ import { Node, Edge, NodeChange, EdgeChange } from "@xyflow/react";
 import type {
   EquipmentNodeData,
   FeedNodeData,
+  PumpNodeData,
   PolymerNodeData,
   DewateringNodeData,
   PlantConfiguration,
@@ -14,6 +15,7 @@ import type {
   SimulationResult,
   JarTest,
   FeedSourceParams,
+  PumpParams,
   PolymerConditionerParams,
   DewateringUnitParams,
 } from "../types";
@@ -29,6 +31,13 @@ const DEFAULT_PLANT_CONFIG: PlantConfiguration = {
       flow_m3_h: 100.0,
       ts_percent: 3.0,
       temperature_C: 20.0,
+    },
+  },
+  transfer_pump: {
+    parameters: {
+      head_m: 20.0,
+      efficiency_pump: 0.7,
+      efficiency_motor: 0.9,
     },
   },
   polymer_conditioner: {
@@ -48,6 +57,7 @@ const DEFAULT_PLANT_CONFIG: PlantConfiguration = {
   },
   settings: {
     polymer_price_per_kg: 5.0,
+    electricity_price_per_kwh: 0.12,
     operating_hours_per_day: 24.0,
     currency: "USD",
   },
@@ -58,7 +68,7 @@ const createDefaultNodes = (): Node<EquipmentNodeData>[] => [
   {
     id: "feed-1",
     type: "feed",
-    position: { x: 100, y: 200 },
+    position: { x: 50, y: 200 },
     data: {
       type: "feed",
       label: "Feed Source",
@@ -66,9 +76,19 @@ const createDefaultNodes = (): Node<EquipmentNodeData>[] => [
     } as FeedNodeData,
   },
   {
+    id: "pump-1",
+    type: "pump",
+    position: { x: 300, y: 200 },
+    data: {
+      type: "pump",
+      label: "Transfer Pump",
+      parameters: { ...DEFAULT_PLANT_CONFIG.transfer_pump!.parameters },
+    } as PumpNodeData,
+  },
+  {
     id: "polymer-1",
     type: "polymer",
-    position: { x: 400, y: 200 },
+    position: { x: 550, y: 200 },
     data: {
       type: "polymer",
       label: "Polymer Conditioner",
@@ -78,7 +98,7 @@ const createDefaultNodes = (): Node<EquipmentNodeData>[] => [
   {
     id: "dewatering-1",
     type: "dewatering",
-    position: { x: 700, y: 200 },
+    position: { x: 800, y: 200 },
     data: {
       type: "dewatering",
       label: "Dewatering Unit",
@@ -90,8 +110,16 @@ const createDefaultNodes = (): Node<EquipmentNodeData>[] => [
 // Default edges connecting the nodes
 const createDefaultEdges = (): Edge[] => [
   {
-    id: "feed-to-polymer",
+    id: "feed-to-pump",
     source: "feed-1",
+    target: "pump-1",
+    sourceHandle: "output",
+    targetHandle: "input",
+    type: "stream",
+  },
+  {
+    id: "pump-to-polymer",
+    source: "pump-1",
     target: "polymer-1",
     sourceHandle: "output",
     targetHandle: "input",
@@ -140,7 +168,7 @@ interface PlantState {
   onEdgesChange: (changes: EdgeChange[]) => void;
   updateNodeParameters: (
     nodeId: string,
-    params: Partial<FeedSourceParams | PolymerConditionerParams | DewateringUnitParams>
+    params: Partial<FeedSourceParams | PumpParams | PolymerConditionerParams | DewateringUnitParams>
   ) => void;
   selectNode: (nodeId: string | null) => void;
   setPlantConfiguration: (config: PlantConfiguration) => void;
@@ -235,6 +263,17 @@ export const useStore = create<PlantState>()(
           } as FeedSourceParams;
           state.plantConfiguration.feed_source.parameters = updatedParams;
           (node.data as FeedNodeData).parameters = updatedParams;
+        } else if (node.data.type === "pump") {
+          // Ensure transfer_pump exists in config
+          if (!state.plantConfiguration.transfer_pump) {
+             state.plantConfiguration.transfer_pump = { parameters: { head_m: 20, efficiency_pump: 0.7, efficiency_motor: 0.9 } };
+          }
+          const updatedParams = {
+            ...state.plantConfiguration.transfer_pump.parameters,
+            ...params,
+          } as PumpParams;
+          state.plantConfiguration.transfer_pump.parameters = updatedParams;
+          (node.data as PumpNodeData).parameters = updatedParams;
         } else if (node.data.type === "polymer") {
           const updatedParams = {
             ...state.plantConfiguration.polymer_conditioner.parameters,
@@ -272,6 +311,10 @@ export const useStore = create<PlantState>()(
             (node.data as FeedNodeData).parameters = {
               ...config.feed_source.parameters,
             };
+          } else if (node.data.type === "pump" && config.transfer_pump) {
+            (node.data as PumpNodeData).parameters = {
+              ...config.transfer_pump.parameters,
+            };
           } else if (node.data.type === "polymer") {
             (node.data as PolymerNodeData).parameters = {
               ...config.polymer_conditioner.parameters,
@@ -302,6 +345,9 @@ export const useStore = create<PlantState>()(
           state.nodes.forEach((node: Node<EquipmentNodeData>) => {
             if (node.data.type === "feed") {
               (node.data as FeedNodeData).streamData = result.streams.feed;
+            } else if (node.data.type === "pump") {
+              (node.data as PumpNodeData).streamData = result.streams.pump_out || result.streams.feed;
+              (node.data as PumpNodeData).powerKW = result.kpis.pump_power_kW;
             } else if (node.data.type === "polymer") {
               (node.data as PolymerNodeData).streamData = result.streams.conditioned;
               (node.data as PolymerNodeData).effectiveDose = result.kpis.polymer_dose_ppm;
@@ -346,6 +392,10 @@ export const useStore = create<PlantState>()(
           if (node.data.type === "feed") {
             (node.data as FeedNodeData).parameters = {
               ...project.plant_configuration.feed_source.parameters,
+            };
+          } else if (node.data.type === "pump" && project.plant_configuration.transfer_pump) {
+            (node.data as PumpNodeData).parameters = {
+              ...project.plant_configuration.transfer_pump.parameters,
             };
           } else if (node.data.type === "polymer") {
             (node.data as PolymerNodeData).parameters = {

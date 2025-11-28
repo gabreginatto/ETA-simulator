@@ -35,10 +35,19 @@ class DewateringUnitParams(BaseModel):
     polymer_split_cake: float = Field(default=0.3, ge=0, le=1, description="Polymer fraction to cake")
 
 
+class PumpParams(BaseModel):
+    """Transfer pump parameters."""
+
+    head_m: float = Field(default=20.0, gt=0, description="Pump head in meters")
+    efficiency_pump: float = Field(default=0.7, gt=0, le=1, description="Pump hydraulic efficiency")
+    efficiency_motor: float = Field(default=0.9, gt=0, le=1, description="Motor efficiency")
+
+
 class PlantSettings(BaseModel):
     """Plant operating settings."""
 
     polymer_price_per_kg: Optional[float] = Field(None, ge=0, description="Polymer cost per kg")
+    electricity_price_per_kwh: Optional[float] = Field(None, ge=0, description="Electricity cost per kWh")
     operating_hours_per_day: float = Field(default=24.0, gt=0, le=24, description="Operating hours")
     currency: str = Field(default="USD", description="Currency for cost display")
 
@@ -47,6 +56,7 @@ class PlantConfiguration(BaseModel):
     """Complete plant configuration."""
 
     feed_source: Dict[str, Any] = Field(..., description="Feed source configuration")
+    transfer_pump: Optional[Dict[str, Any]] = Field(None, description="Transfer pump configuration")
     polymer_conditioner: Dict[str, Any] = Field(..., description="Polymer conditioner configuration")
     dewatering_unit: Dict[str, Any] = Field(..., description="Dewatering unit configuration")
     settings: Dict[str, Any] = Field(default_factory=dict, description="Plant settings")
@@ -57,11 +67,13 @@ class PlantConfiguration(BaseModel):
         feed: FeedSourceParams,
         polymer: PolymerConditionerParams,
         dewatering: DewateringUnitParams,
+        pump: Optional[PumpParams] = None,
         settings: Optional[PlantSettings] = None,
     ) -> "PlantConfiguration":
         """Create configuration from parameter objects."""
         return cls(
             feed_source={"parameters": feed.model_dump()},
+            transfer_pump={"parameters": pump.model_dump()} if pump else None,
             polymer_conditioner={"parameters": polymer.model_dump()},
             dewatering_unit={"parameters": dewatering.model_dump()},
             settings=settings.model_dump() if settings else {},
@@ -71,6 +83,7 @@ class PlantConfiguration(BaseModel):
         """Convert to format expected by solve_plant."""
         return {
             "feed_source": self.feed_source,
+            "transfer_pump": self.transfer_pump,
             "polymer_conditioner": self.polymer_conditioner,
             "dewatering_unit": self.dewatering_unit,
             "settings": self.settings,
@@ -172,8 +185,16 @@ def get_default_plant_configuration() -> PlantConfiguration:
                 "polymer_split_cake": 0.3,
             }
         },
+        transfer_pump={
+            "parameters": {
+                "head_m": 20.0,
+                "efficiency_pump": 0.7,
+                "efficiency_motor": 0.9,
+            }
+        },
         settings={
             "polymer_price_per_kg": None,
+            "electricity_price_per_kwh": None,
             "operating_hours_per_day": 24.0,
             "currency": "USD",
         },

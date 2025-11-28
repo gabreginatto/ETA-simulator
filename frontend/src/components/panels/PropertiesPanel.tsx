@@ -1,13 +1,15 @@
 /**
  * Right sidebar panel for editing equipment properties.
  */
-import { X, Droplets, FlaskConical, Factory } from "lucide-react";
+import { X, Droplets, FlaskConical, Factory, Activity } from "lucide-react";
 import { useStore, useSelectedNode } from "../../store/useStore";
 import { FeedForm } from "../forms/FeedForm";
+import { PumpForm } from "../forms/PumpForm";
 import { PolymerForm } from "../forms/PolymerForm";
 import { DewateringForm } from "../forms/DewateringForm";
 import type {
   FeedNodeData,
+  PumpNodeData,
   PolymerNodeData,
   DewateringNodeData,
 } from "../../types";
@@ -41,6 +43,13 @@ export function PropertiesPanel() {
         return {
           icon: <Droplets className="w-5 h-5" />,
           title: "Feed Source",
+          bgColor: "bg-cyan-500",
+          textColor: "text-white",
+        };
+      case "pump":
+        return {
+          icon: <Activity className="w-5 h-5" />,
+          title: "Transfer Pump",
           bgColor: "bg-cyan-500",
           textColor: "text-white",
         };
@@ -95,6 +104,12 @@ export function PropertiesPanel() {
           <FeedForm
             nodeId={selectedNode.id}
             parameters={(nodeData as FeedNodeData).parameters}
+          />
+        )}
+        {nodeData.type === "pump" && (
+          <PumpForm
+            nodeId={selectedNode.id}
+            parameters={(nodeData as PumpNodeData).parameters}
           />
         )}
         {nodeData.type === "polymer" && (

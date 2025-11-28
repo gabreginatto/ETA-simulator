@@ -38,8 +38,15 @@ export interface DewateringUnitParams {
   polymer_split_cake?: number;
 }
 
+export interface PumpParams {
+  head_m: number;
+  efficiency_pump: number;
+  efficiency_motor: number;
+}
+
 export interface PlantSettings {
   polymer_price_per_kg?: number;
+  electricity_price_per_kwh?: number;
   operating_hours_per_day?: number;
   currency?: string;
 }
@@ -48,6 +55,9 @@ export interface PlantSettings {
 export interface PlantConfiguration {
   feed_source: {
     parameters: FeedSourceParams;
+  };
+  transfer_pump?: {
+    parameters: PumpParams;
   };
   polymer_conditioner: {
     parameters: PolymerConditionerParams;
@@ -86,6 +96,13 @@ export interface KPIs {
   polymer_cost_per_month?: number;
   polymer_cost_per_year?: number;
   polymer_cost_per_tDS?: number;
+
+  // Energy Metrics (optional)
+  pump_power_kW?: number;
+  energy_kwh_per_month?: number;
+  energy_cost_per_day?: number;
+  energy_cost_per_month?: number;
+  energy_cost_per_year?: number;
 }
 
 // Simulation result
@@ -96,6 +113,7 @@ export interface SimulationResult {
     conditioned: StreamData;
     cake: StreamData;
     liquid: StreamData;
+    pump_out?: StreamData;
   };
   kpis: KPIs;
   warnings: string[];
@@ -150,7 +168,7 @@ export interface Project {
 }
 
 // React Flow node data types
-export type EquipmentType = "feed" | "polymer" | "dewatering";
+export type EquipmentType = "feed" | "polymer" | "dewatering" | "pump";
 
 export interface BaseNodeData {
   type: EquipmentType;
@@ -162,6 +180,13 @@ export interface FeedNodeData extends BaseNodeData {
   type: "feed";
   parameters: FeedSourceParams;
   streamData?: StreamData;
+}
+
+export interface PumpNodeData extends BaseNodeData {
+  type: "pump";
+  parameters: PumpParams;
+  streamData?: StreamData;
+  powerKW?: number;
 }
 
 export interface PolymerNodeData extends BaseNodeData {
@@ -182,6 +207,7 @@ export interface DewateringNodeData extends BaseNodeData {
 
 export type EquipmentNodeData =
   | FeedNodeData
+  | PumpNodeData
   | PolymerNodeData
   | DewateringNodeData;
 
@@ -209,6 +235,10 @@ export const EQUIPMENT_PORTS: Record<EquipmentType, EquipmentPorts> = {
   feed: {
     inputs: [],
     outputs: [{ id: "output", portType: "sludge", direction: "output", label: "Sludge Out" }],
+  },
+  pump: {
+    inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Sludge In" }],
+    outputs: [{ id: "output", portType: "sludge", direction: "output", label: "Pumped Out" }],
   },
   polymer: {
     inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Sludge In" }],

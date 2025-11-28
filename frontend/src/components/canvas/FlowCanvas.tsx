@@ -19,6 +19,7 @@ import "@xyflow/react/dist/style.css";
 
 import { useStore } from "../../store/useStore";
 import { FeedNode } from "./nodes/FeedNode";
+import { PumpNode } from "./nodes/PumpNode";
 import { PolymerNode } from "./nodes/PolymerNode";
 import { DewateringNode } from "./nodes/DewateringNode";
 import { StreamEdge } from "./edges/StreamEdge";
@@ -31,6 +32,7 @@ import {
 // Register custom node types
 const nodeTypes: NodeTypes = {
   feed: FeedNode,
+  pump: PumpNode,
   polymer: PolymerNode,
   dewatering: DewateringNode,
 };
@@ -179,6 +181,8 @@ export function FlowCanvas() {
             switch (node.type) {
               case "feed":
                 return "#0891b2"; // cyan
+              case "pump":
+                return "#06b6d4"; // cyan-500
               case "polymer":
                 return "#7c3aed"; // violet
               case "dewatering":
