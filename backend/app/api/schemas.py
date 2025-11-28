@@ -13,12 +13,49 @@ from app.models.project import PlantConfiguration
 # Request Schemas
 # =============================================================================
 
-class SimulateRequest(BaseModel):
-    """Request body for POST /simulate."""
 
-    plant_definition: Dict[str, Any] = Field(
-        ..., description="Plant configuration for simulation"
+class GraphNode(BaseModel):
+    """A node in the simulation graph (React Flow format)."""
+
+    id: str = Field(..., description="Unique node identifier")
+    type: str = Field(..., description="Node type: feed, pump, polymer, dewatering")
+    data: Dict[str, Any] = Field(
+        default_factory=dict, description="Node data containing parameters"
     )
+
+
+class GraphEdge(BaseModel):
+    """An edge connecting two nodes in the simulation graph."""
+
+    id: str = Field(..., description="Unique edge identifier")
+    source: str = Field(..., description="Source node ID")
+    sourceHandle: str = Field(default="output", description="Source port handle")
+    target: str = Field(..., description="Target node ID")
+    targetHandle: str = Field(default="input", description="Target port handle")
+
+
+class SimulateRequest(BaseModel):
+    """Request body for POST /simulate.
+
+    Supports two payload formats:
+    1. Graph-based: nodes + edges (React Flow format)
+    2. Legacy: plant_definition (backward compatibility)
+    """
+
+    # Graph-based payload (new)
+    nodes: Optional[List[GraphNode]] = Field(
+        None, description="Graph nodes (React Flow format)"
+    )
+    edges: Optional[List[GraphEdge]] = Field(
+        None, description="Graph edges (React Flow format)"
+    )
+
+    # Legacy payload (backward compatibility)
+    plant_definition: Optional[Dict[str, Any]] = Field(
+        None, description="Legacy plant configuration for simulation"
+    )
+
+    # Common fields
     jar_test_id: Optional[str] = Field(
         None, description="Optional jar test ID to use for polymer dose"
     )
@@ -28,32 +65,93 @@ class SimulateRequest(BaseModel):
 
     model_config = {
         "json_schema_extra": {
-            "example": {
-                "plant_definition": {
-                    "feed_source": {
-                        "parameters": {
-                            "flow_m3_h": 100.0,
-                            "ts_percent": 3.0,
-                            "temperature_C": 20.0,
+            "examples": [
+                {
+                    "description": "Graph-based request",
+                    "value": {
+                        "nodes": [
+                            {
+                                "id": "feed-1",
+                                "type": "feed",
+                                "data": {
+                                    "parameters": {
+                                        "flow_m3_h": 100.0,
+                                        "ts_percent": 3.0,
+                                        "temperature_C": 20.0,
+                                    }
+                                },
+                            },
+                            {
+                                "id": "polymer-1",
+                                "type": "polymer",
+                                "data": {
+                                    "parameters": {
+                                        "jar_test_optimum_ppm": 15.0,
+                                        "shear_factor": 1.2,
+                                        "safety_factor": 1.1,
+                                    }
+                                },
+                            },
+                            {
+                                "id": "dewatering-1",
+                                "type": "dewatering",
+                                "data": {
+                                    "parameters": {
+                                        "max_flow_m3_h": 150.0,
+                                        "capture_rate": 0.95,
+                                        "cake_dryness_percent": 23.0,
+                                    }
+                                },
+                            },
+                        ],
+                        "edges": [
+                            {
+                                "id": "e1",
+                                "source": "feed-1",
+                                "sourceHandle": "output",
+                                "target": "polymer-1",
+                                "targetHandle": "input",
+                            },
+                            {
+                                "id": "e2",
+                                "source": "polymer-1",
+                                "sourceHandle": "output",
+                                "target": "dewatering-1",
+                                "targetHandle": "input",
+                            },
+                        ],
+                    },
+                },
+                {
+                    "description": "Legacy plant_definition request",
+                    "value": {
+                        "plant_definition": {
+                            "feed_source": {
+                                "parameters": {
+                                    "flow_m3_h": 100.0,
+                                    "ts_percent": 3.0,
+                                    "temperature_C": 20.0,
+                                }
+                            },
+                            "polymer_conditioner": {
+                                "parameters": {
+                                    "jar_test_optimum_ppm": 15.0,
+                                    "shear_factor": 1.2,
+                                    "safety_factor": 1.1,
+                                }
+                            },
+                            "dewatering_unit": {
+                                "parameters": {
+                                    "max_flow_m3_h": 150.0,
+                                    "capture_rate": 0.95,
+                                    "cake_dryness_percent": 23.0,
+                                }
+                            },
+                            "settings": {"polymer_price_per_kg": 5.0},
                         }
                     },
-                    "polymer_conditioner": {
-                        "parameters": {
-                            "jar_test_optimum_ppm": 15.0,
-                            "shear_factor": 1.2,
-                            "safety_factor": 1.1,
-                        }
-                    },
-                    "dewatering_unit": {
-                        "parameters": {
-                            "max_flow_m3_h": 150.0,
-                            "capture_rate": 0.95,
-                            "cake_dryness_percent": 23.0,
-                        }
-                    },
-                    "settings": {"polymer_price_per_kg": 5.0},
-                }
-            }
+                },
+            ]
         }
     }
 

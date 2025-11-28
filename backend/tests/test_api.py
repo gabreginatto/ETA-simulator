@@ -138,6 +138,106 @@ class TestSimulateEndpoint:
 
         assert response.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_simulate_graph_based(self, client):
+        """Test simulation with graph-based nodes/edges payload."""
+        nodes = [
+            {
+                "id": "feed-1",
+                "type": "feed",
+                "data": {
+                    "parameters": {
+                        "flow_m3_h": 100.0,
+                        "ts_percent": 3.0,
+                        "temperature_C": 20.0,
+                    }
+                },
+            },
+            {
+                "id": "polymer-1",
+                "type": "polymer",
+                "data": {
+                    "parameters": {
+                        "jar_test_optimum_ppm": 15.0,
+                        "shear_factor": 1.2,
+                        "safety_factor": 1.1,
+                    }
+                },
+            },
+            {
+                "id": "dew-1",
+                "type": "dewatering",
+                "data": {
+                    "parameters": {
+                        "max_flow_m3_h": 150.0,
+                        "capture_rate": 0.95,
+                        "cake_dryness_percent": 23.0,
+                    }
+                },
+            },
+        ]
+        edges = [
+            {"id": "e1", "source": "feed-1", "sourceHandle": "output", "target": "polymer-1", "targetHandle": "input"},
+            {"id": "e2", "source": "polymer-1", "sourceHandle": "output", "target": "dew-1", "targetHandle": "input"},
+        ]
+
+        response = await client.post(
+            "/api/simulate",
+            json={
+                "nodes": nodes,
+                "edges": edges,
+                "plant_definition": {"settings": {"polymer_price_per_kg": 5.0}},
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "feed" in data["streams"]
+        assert "cake" in data["streams"]
+        assert "polymer_dose_ppm" in data["kpis"]
+
+    @pytest.mark.asyncio
+    async def test_simulate_graph_with_pump(self, client):
+        """Test graph-based simulation with pump node."""
+        nodes = [
+            {"id": "feed-1", "type": "feed", "data": {"parameters": {"flow_m3_h": 100.0, "ts_percent": 3.0}}},
+            {"id": "pump-1", "type": "pump", "data": {"parameters": {"head_m": 20.0, "efficiency_pump": 0.7, "efficiency_motor": 0.9}}},
+            {"id": "polymer-1", "type": "polymer", "data": {"parameters": {"jar_test_optimum_ppm": 15.0, "shear_factor": 1.2, "safety_factor": 1.1}}},
+            {"id": "dew-1", "type": "dewatering", "data": {"parameters": {"capture_rate": 0.95, "cake_dryness_percent": 23.0}}},
+        ]
+        edges = [
+            {"id": "e1", "source": "feed-1", "target": "pump-1"},
+            {"id": "e2", "source": "pump-1", "target": "polymer-1"},
+            {"id": "e3", "source": "polymer-1", "target": "dew-1"},
+        ]
+
+        response = await client.post("/api/simulate", json={"nodes": nodes, "edges": edges})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "pump_out" in data["streams"]
+
+    @pytest.mark.asyncio
+    async def test_simulate_graph_invalid_node_type(self, client):
+        """Test graph-based simulation with invalid node type."""
+        nodes = [
+            {"id": "bad-1", "type": "unknown_type", "data": {"parameters": {}}},
+        ]
+        edges = []
+
+        response = await client.post("/api/simulate", json={"nodes": nodes, "edges": edges})
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_simulate_no_payload(self, client):
+        """Test simulation with no payload returns error."""
+        response = await client.post("/api/simulate", json={})
+
+        assert response.status_code == 400
+
 
 class TestJarTestsEndpoint:
     """Test jar tests endpoints."""

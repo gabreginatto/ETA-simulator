@@ -4,6 +4,7 @@
 import axios, { AxiosError } from "axios";
 import type {
   PlantConfiguration,
+  PlantSettings,
   SimulationResult,
   Project,
   JarTest,
@@ -11,6 +12,8 @@ import type {
   CreateProjectRequest,
   UpdateProjectRequest,
   CreateJarTestRequest,
+  GraphNode,
+  GraphEdge,
 } from "../types";
 
 const API_BASE_URL =
@@ -74,7 +77,41 @@ function getErrorMessage(error: unknown): string {
 // Simulation API
 // ============================================
 
+/**
+ * Run a simulation using graph-based nodes and edges.
+ *
+ * @param nodes - Array of graph nodes in React Flow format
+ * @param edges - Array of graph edges in React Flow format
+ * @param jarTestId - Optional jar test ID to use for polymer dose
+ * @param jarTestOptimumPpm - Optional override for jar test optimum dose
+ * @param settings - Optional plant settings (polymer price, electricity price, etc.)
+ */
 export async function simulate(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  jarTestId?: string,
+  jarTestOptimumPpm?: number,
+  settings?: PlantSettings
+): Promise<SimulationResult> {
+  try {
+    const response = await api.post<SimulationResult>("/simulate", {
+      nodes,
+      edges,
+      plant_definition: settings ? { settings } : undefined,
+      jar_test_id: jarTestId,
+      jar_test_optimum_ppm: jarTestOptimumPpm,
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+/**
+ * Run a simulation using legacy plant_definition format.
+ * @deprecated Use simulate() with nodes/edges instead
+ */
+export async function simulateLegacy(
   plantDefinition: PlantConfiguration,
   jarTestId?: string,
   jarTestOptimumPpm?: number
@@ -103,14 +140,35 @@ export interface ValidationResult {
   warnings: ValidationError[];
 }
 
+/**
+ * Validate a graph-based configuration.
+ */
+export async function validateGraph(
+  nodes: GraphNode[],
+  edges: GraphEdge[]
+): Promise<ValidationResult> {
+  try {
+    const response = await api.post<ValidationResult>("/simulate/validate", {
+      nodes,
+      edges,
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+/**
+ * Validate a legacy plant_definition configuration.
+ * @deprecated Use validateGraph() with nodes/edges instead
+ */
 export async function validateConfiguration(
   plantDefinition: PlantConfiguration
 ): Promise<ValidationResult> {
   try {
-    const response = await api.post<ValidationResult>(
-      "/simulate/validate",
-      { plant_definition: plantDefinition }
-    );
+    const response = await api.post<ValidationResult>("/simulate/validate", {
+      plant_definition: plantDefinition,
+    });
     return response.data;
   } catch (error) {
     throw new Error(getErrorMessage(error));

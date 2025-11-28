@@ -46,11 +46,53 @@ class EquipmentPorts:
 
 
 # Standard port definitions for each equipment type
+# Uses frontend naming convention (feed, pump, polymer, dewatering)
 EQUIPMENT_PORTS: Dict[str, EquipmentPorts] = {
+    # Frontend names (used in graph-based API)
+    "feed": EquipmentPorts(
+        inputs=[],
+        outputs=[
+            Port("output", PortType.SLUDGE, PortDirection.OUTPUT, "Sludge Out")
+        ]
+    ),
+    "pump": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Sludge In")
+        ],
+        outputs=[
+            Port("output", PortType.SLUDGE, PortDirection.OUTPUT, "Pumped Out")
+        ]
+    ),
+    "polymer": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Sludge In")
+        ],
+        outputs=[
+            Port("output", PortType.SLUDGE, PortDirection.OUTPUT, "Conditioned Out")
+        ]
+    ),
+    "dewatering": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Sludge In")
+        ],
+        outputs=[
+            Port("cake", PortType.CAKE, PortDirection.OUTPUT, "Cake Out"),
+            Port("liquid", PortType.LIQUID, PortDirection.OUTPUT, "Centrate Out")
+        ]
+    ),
+    # Legacy backend names (for backward compatibility)
     "feed_source": EquipmentPorts(
         inputs=[],
         outputs=[
             Port("output", PortType.SLUDGE, PortDirection.OUTPUT, "Sludge Out")
+        ]
+    ),
+    "transfer_pump": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Sludge In")
+        ],
+        outputs=[
+            Port("output", PortType.SLUDGE, PortDirection.OUTPUT, "Pumped Out")
         ]
     ),
     "polymer_conditioner": EquipmentPorts(
@@ -250,3 +292,95 @@ class GraphValidator:
             return None, "Graph contains unreachable nodes"
 
         return result, ""
+
+
+# =============================================================================
+# Graph Utilities for Solver
+# =============================================================================
+
+# Valid node types for the graph-based API
+VALID_NODE_TYPES = {"feed", "pump", "polymer", "dewatering"}
+
+
+def build_incoming_edge_map(edges: List[Dict]) -> Dict[str, List[Dict]]:
+    """
+    Build a map of target_node -> list of incoming edges.
+
+    Args:
+        edges: List of edge dictionaries with source, target, sourceHandle, targetHandle
+
+    Returns:
+        Dictionary mapping target node IDs to their incoming edges
+    """
+    incoming: Dict[str, List[Dict]] = {}
+    for edge in edges:
+        target = edge["target"]
+        if target not in incoming:
+            incoming[target] = []
+        incoming[target].append(edge)
+    return incoming
+
+
+def validate_graph(nodes: List[Dict], edges: List[Dict]) -> List[str]:
+    """
+    Validate graph structure for simulation.
+
+    Checks:
+    - All nodes have valid types
+    - All edges reference existing nodes
+    - All port connections are compatible
+
+    Args:
+        nodes: List of node dictionaries with id, type, data
+        edges: List of edge dictionaries
+
+    Returns:
+        List of error messages (empty if valid)
+    """
+    errors: List[str] = []
+
+    # Build node lookup
+    node_ids = {n["id"] for n in nodes}
+    node_types = {n["id"]: n["type"] for n in nodes}
+
+    # Check node types are valid
+    for node in nodes:
+        node_type = node.get("type")
+        if node_type not in VALID_NODE_TYPES:
+            errors.append(f"Unknown node type '{node_type}' for node '{node['id']}'")
+
+    # Check edges reference valid nodes
+    for edge in edges:
+        source = edge.get("source")
+        target = edge.get("target")
+
+        if source not in node_ids:
+            errors.append(f"Edge '{edge.get('id', '?')}' references unknown source node: {source}")
+        if target not in node_ids:
+            errors.append(f"Edge '{edge.get('id', '?')}' references unknown target node: {target}")
+
+    # Skip port validation if we have node reference errors
+    if errors:
+        return errors
+
+    # Check port compatibility for each edge
+    for edge in edges:
+        source = edge["source"]
+        target = edge["target"]
+        source_handle = edge.get("sourceHandle", "output")
+        target_handle = edge.get("targetHandle", "input")
+
+        source_type = node_types.get(source)
+        target_type = node_types.get(target)
+
+        if source_type and target_type:
+            valid, msg = GraphValidator.is_connection_valid(
+                source_type, source_handle,
+                target_type, target_handle
+            )
+            if not valid:
+                errors.append(
+                    f"Invalid connection {source}.{source_handle} -> {target}.{target_handle}: {msg}"
+                )
+
+    return errors

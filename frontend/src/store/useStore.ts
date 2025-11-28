@@ -18,6 +18,9 @@ import type {
   PumpParams,
   PolymerConditionerParams,
   DewateringUnitParams,
+  GraphNode,
+  GraphEdge,
+  EquipmentType,
 } from "../types";
 import type { ValidationError } from "../api/client";
 
@@ -535,3 +538,45 @@ export const useSelectedNode = () =>
     if (!state.selectedNodeId) return null;
     return state.nodes.find((n) => n.id === state.selectedNodeId) || null;
   });
+
+// ============================================
+// Graph API helpers
+// ============================================
+
+/**
+ * Convert React Flow nodes to API GraphNode format.
+ */
+export function nodesToApiFormat(nodes: Node<EquipmentNodeData>[]): GraphNode[] {
+  return nodes.map((node) => ({
+    id: node.id,
+    type: node.data.type as EquipmentType,
+    data: {
+      parameters: node.data.parameters,
+    },
+  }));
+}
+
+/**
+ * Convert React Flow edges to API GraphEdge format.
+ */
+export function edgesToApiFormat(edges: Edge[]): GraphEdge[] {
+  return edges.map((edge) => ({
+    id: edge.id,
+    source: edge.source,
+    sourceHandle: edge.sourceHandle || "output",
+    target: edge.target,
+    targetHandle: edge.targetHandle || "input",
+  }));
+}
+
+/**
+ * Hook to get nodes in API format.
+ */
+export const useNodesForApi = () =>
+  useStore((state) => nodesToApiFormat(state.nodes));
+
+/**
+ * Hook to get edges in API format.
+ */
+export const useEdgesForApi = () =>
+  useStore((state) => edgesToApiFormat(state.edges));

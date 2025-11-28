@@ -1,14 +1,16 @@
 /**
- * Custom hook for running simulations.
+ * Custom hook for running simulations using graph-based API.
+ *
+ * This hook automatically serializes React Flow nodes and edges
+ * from the store to the API format.
  */
 import { useMutation } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { simulate } from "../api/client";
-import { useStore } from "../store/useStore";
-import type { PlantConfiguration, SimulationResult } from "../types";
+import { useStore, nodesToApiFormat, edgesToApiFormat } from "../store/useStore";
+import type { SimulationResult, GraphNode, GraphEdge, PlantSettings } from "../types";
 
 interface SimulateParams {
-  plantDefinition: PlantConfiguration;
-  jarTestId?: string;
   jarTestOptimumPpm?: number;
 }
 
@@ -17,13 +19,24 @@ export function useSimulation() {
   const setIsSimulating = useStore((state) => state.setIsSimulating);
   const plantConfiguration = useStore((state) => state.plantConfiguration);
   const selectedJarTestId = useStore((state) => state.selectedJarTestId);
+  const nodes = useStore((state) => state.nodes);
+  const edges = useStore((state) => state.edges);
 
   const mutation = useMutation({
-    mutationFn: async (params: SimulateParams): Promise<SimulationResult> => {
+    mutationFn: async (params?: SimulateParams): Promise<SimulationResult> => {
+      // Convert React Flow nodes/edges to API format
+      const apiNodes: GraphNode[] = nodesToApiFormat(nodes);
+      const apiEdges: GraphEdge[] = edgesToApiFormat(edges);
+
+      // Extract settings from plant configuration
+      const settings: PlantSettings | undefined = plantConfiguration?.settings;
+
       return simulate(
-        params.plantDefinition,
-        params.jarTestId,
-        params.jarTestOptimumPpm
+        apiNodes,
+        apiEdges,
+        selectedJarTestId || undefined,
+        params?.jarTestOptimumPpm,
+        settings
       );
     },
     onMutate: () => {
@@ -42,12 +55,9 @@ export function useSimulation() {
   });
 
   // Convenience function that uses current store state
-  const runSimulation = () => {
-    mutation.mutate({
-      plantDefinition: plantConfiguration,
-      jarTestId: selectedJarTestId || undefined,
-    });
-  };
+  const runSimulation = useCallback(() => {
+    mutation.mutate({});
+  }, [mutation]);
 
   return {
     simulate: mutation.mutate,

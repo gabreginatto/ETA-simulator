@@ -289,11 +289,48 @@ export function getPortType(
 }
 
 // ============================================
+// Graph types for API
+// ============================================
+
+/**
+ * A node in the simulation graph (React Flow format for API).
+ */
+export interface GraphNode {
+  id: string;
+  type: EquipmentType;
+  data: {
+    parameters: FeedSourceParams | PolymerConditionerParams | DewateringUnitParams | PumpParams;
+  };
+}
+
+/**
+ * An edge connecting two nodes in the simulation graph.
+ */
+export interface GraphEdge {
+  id: string;
+  source: string;
+  sourceHandle?: string;
+  target: string;
+  targetHandle?: string;
+}
+
+// ============================================
 // API request/response types
 // ============================================
 
+/**
+ * Request body for POST /simulate.
+ * Supports two payload formats:
+ * 1. Graph-based: nodes + edges (React Flow format)
+ * 2. Legacy: plant_definition (backward compatibility)
+ */
 export interface SimulateRequest {
-  plant_definition: PlantConfiguration;
+  // Graph-based payload (new)
+  nodes?: GraphNode[];
+  edges?: GraphEdge[];
+  // Legacy payload (backward compatibility)
+  plant_definition?: PlantConfiguration;
+  // Common fields
   jar_test_id?: string;
   jar_test_optimum_ppm?: number;
 }

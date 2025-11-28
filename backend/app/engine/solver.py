@@ -1,22 +1,39 @@
 """
-Main simulation solver orchestrating the dewatering simulation pipeline.
+Graph-based simulation solver for the dewatering simulation pipeline.
 
-This module coordinates all engine components to run a complete simulation
-from feed parameters to final KPIs.
+This module provides a registry-based graph execution engine that accepts
+React Flow–style nodes and edges, executes via topological sort, and
+produces simulation results.
 
-Example:
-    >>> from app.engine.solver import solve_plant
+Example (graph-based):
+    >>> from app.engine.solver import solve_graph
+    >>> nodes = [
+    ...     {"id": "feed-1", "type": "feed", "data": {"parameters": {"flow_m3_h": 100, "ts_percent": 3.0}}},
+    ...     {"id": "polymer-1", "type": "polymer", "data": {"parameters": {"jar_test_optimum_ppm": 15, "shear_factor": 1.2, "safety_factor": 1.1}}},
+    ...     {"id": "dewatering-1", "type": "dewatering", "data": {"parameters": {"capture_rate": 0.95, "cake_dryness_percent": 23}}},
+    ... ]
+    >>> edges = [
+    ...     {"id": "e1", "source": "feed-1", "target": "polymer-1"},
+    ...     {"id": "e2", "source": "polymer-1", "target": "dewatering-1"},
+    ... ]
+    >>> result = solve_graph(nodes, edges)
+    >>> result["success"]
+    True
+
+Example (legacy):
+    >>> from app.engine.solver import plant_definition_to_graph, solve_graph
     >>> plant_def = {
     ...     "feed_source": {"parameters": {"flow_m3_h": 100, "ts_percent": 3.0}},
     ...     "polymer_conditioner": {"parameters": {"jar_test_optimum_ppm": 15, "shear_factor": 1.2, "safety_factor": 1.1}},
-    ...     "dewatering_unit": {"parameters": {"max_flow_m3_h": 150, "capture_rate": 0.95, "cake_dryness_percent": 23}},
+    ...     "dewatering_unit": {"parameters": {"capture_rate": 0.95, "cake_dryness_percent": 23}},
     ...     "settings": {}
     ... }
-    >>> result = solve_plant(plant_def)
+    >>> nodes, edges = plant_definition_to_graph(plant_def)
+    >>> result = solve_graph(nodes, edges, settings=plant_def.get("settings"))
     >>> result["success"]
     True
 """
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple, Callable
 
 from app.models.stream import Stream
 from app.engine.feed_source import make_feed_stream, validate_feed_parameters
@@ -31,29 +48,293 @@ from app.engine.dewatering_unit import (
     validate_dewatering_parameters,
 )
 from app.engine.kpis import compute_kpis, generate_kpi_warnings
+from app.engine.graph import (
+    Connection,
+    GraphValidator,
+    build_incoming_edge_map,
+    validate_graph,
+    VALID_NODE_TYPES,
+)
 
 
-def solve_plant(
-    plant_definition: Dict[str, Any],
-    jar_test_optimum_ppm: Optional[float] = None,
-    jar_test_range: Optional[Dict[str, float]] = None,
-) -> Dict[str, Any]:
+# =============================================================================
+# Node Registry
+# =============================================================================
+
+# Registry signature: (params: Dict, inputs: Dict[str, Stream]) -> Dict[str, Stream]
+NODE_REGISTRY: Dict[str, Callable[[Dict[str, Any], Dict[str, Stream]], Dict[str, Stream]]] = {}
+
+
+def register_node(node_type: str):
+    """Decorator to register node execution functions."""
+    def decorator(fn: Callable[[Dict[str, Any], Dict[str, Stream]], Dict[str, Stream]]):
+        NODE_REGISTRY[node_type] = fn
+        return fn
+    return decorator
+
+
+@register_node("feed")
+def execute_feed(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute feed node - creates the initial sludge stream."""
+    stream = make_feed_stream(
+        flow_m3_h=params.get("flow_m3_h", 0),
+        ts_percent=params.get("ts_percent", 0),
+        temperature_C=params.get("temperature_C", 20.0),
+        stream_id="feed",
+    )
+    return {"output": stream}
+
+
+@register_node("pump")
+def execute_pump(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute pump node - transfers stream with energy calculation."""
+    input_stream = inputs.get("input")
+    if not input_stream:
+        raise ValueError("Pump requires input stream")
+
+    head_m = params.get("head_m", 20.0)
+    eff_pump = params.get("efficiency_pump", 0.7)
+    eff_motor = params.get("efficiency_motor", 0.9)
+    total_eff = eff_pump * eff_motor
+
+    out = simulate_pump(
+        stream=input_stream,
+        head_m=head_m,
+        efficiency=total_eff,
+        output_stream_id="pump_out",
+    )
+    return {"output": out}
+
+
+@register_node("polymer")
+def execute_polymer(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute polymer conditioner node - adds polymer to sludge."""
+    input_stream = inputs.get("input")
+    if not input_stream:
+        raise ValueError("Polymer conditioner requires input stream")
+
+    out = apply_polymer(
+        feed=input_stream,
+        jar_dose_ppm=params.get("jar_test_optimum_ppm", 0),
+        shear_factor=params.get("shear_factor", 1.0),
+        safety_factor=params.get("safety_factor", 1.0),
+        stream_id="conditioned",
+    )
+    return {"output": out}
+
+
+@register_node("dewatering")
+def execute_dewatering(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute dewatering unit node - separates cake and liquid."""
+    input_stream = inputs.get("input")
+    if not input_stream:
+        raise ValueError("Dewatering unit requires input stream")
+
+    cake, liquid = dewatering_unit(
+        feed=input_stream,
+        capture_rate=params.get("capture_rate", 0.95),
+        cake_dryness_percent=params.get("cake_dryness_percent", 23.0),
+        polymer_split_cake=params.get("polymer_split_cake", 0.3),
+        cake_stream_id="cake",
+        liquid_stream_id="liquid",
+    )
+    return {"cake": cake, "liquid": liquid}
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+def _find_stream_by_type(
+    nodes: List[Dict],
+    streams: Dict[Tuple[str, str], Stream],
+    node_type: str,
+    handle: str,
+) -> Optional[Stream]:
+    """Find first stream of given node type and handle."""
+    for node in nodes:
+        if node["type"] == node_type:
+            key = (node["id"], handle)
+            if key in streams:
+                return streams[key]
+    return None
+
+
+def _generate_parameter_warnings(
+    nodes: List[Dict],
+    jar_test_optimum_ppm: Optional[float],
+    jar_test_range: Optional[Dict[str, float]],
+) -> List[str]:
+    """Generate warnings based on parameter values."""
+    warnings: List[str] = []
+
+    # Find parameter values from nodes
+    feed_params = {}
+    polymer_params = {}
+    dewatering_params = {}
+
+    for node in nodes:
+        params = node.get("data", {}).get("parameters", {})
+        if node["type"] == "feed":
+            feed_params = params
+        elif node["type"] == "polymer":
+            polymer_params = params
+        elif node["type"] == "dewatering":
+            dewatering_params = params
+
+    # Feed validation
+    if feed_params:
+        flow_m3_h = feed_params.get("flow_m3_h", 0)
+        ts_percent = feed_params.get("ts_percent", 0)
+        temperature_C = feed_params.get("temperature_C", 20.0)
+        warnings.extend(validate_feed_parameters(flow_m3_h, ts_percent, temperature_C))
+
+    # Polymer validation
+    if polymer_params:
+        jar_dose_ppm = jar_test_optimum_ppm or polymer_params.get("jar_test_optimum_ppm", 0)
+        shear_factor = polymer_params.get("shear_factor", 1.0)
+        safety_factor = polymer_params.get("safety_factor", 1.0)
+        warnings.extend(validate_polymer_parameters(jar_dose_ppm, shear_factor, safety_factor))
+
+        # Check effective dose range
+        effective_ppm = get_effective_dose_ppm(jar_dose_ppm, shear_factor, safety_factor)
+        if effective_ppm < 5:
+            warnings.append(
+                f"Very low effective dose ({effective_ppm:.1f} ppm) - may result in poor flocculation"
+            )
+        elif effective_ppm > 50:
+            warnings.append(
+                f"Very high effective dose ({effective_ppm:.1f} ppm) - verify jar test results"
+            )
+
+        # Check against jar test acceptable range
+        if jar_test_range:
+            range_min = jar_test_range.get("acceptable_range_min_ppm")
+            range_max = jar_test_range.get("acceptable_range_max_ppm")
+            if range_min is not None and effective_ppm < range_min:
+                warnings.append(
+                    f"Effective dose ({effective_ppm:.1f} ppm) is below jar test acceptable range (min: {range_min:.1f} ppm)"
+                )
+            if range_max is not None and effective_ppm > range_max:
+                warnings.append(
+                    f"Effective dose ({effective_ppm:.1f} ppm) exceeds jar test acceptable range (max: {range_max:.1f} ppm)"
+                )
+
+    # Dewatering validation
+    if dewatering_params and feed_params:
+        flow_m3_h = feed_params.get("flow_m3_h", 0)
+        max_flow_m3_h = dewatering_params.get("max_flow_m3_h", 100)
+        capture_rate = dewatering_params.get("capture_rate", 0.95)
+        cake_dryness_percent = dewatering_params.get("cake_dryness_percent", 23.0)
+        warnings.extend(
+            validate_dewatering_parameters(flow_m3_h, max_flow_m3_h, capture_rate, cake_dryness_percent)
+        )
+
+    return warnings
+
+
+# =============================================================================
+# Legacy Shim
+# =============================================================================
+
+def plant_definition_to_graph(plant_def: Dict[str, Any]) -> Tuple[List[Dict], List[Dict]]:
     """
-    Run a complete dewatering simulation based on plant definition.
+    Convert legacy plant_definition to nodes/edges format.
 
     Args:
-        plant_definition: Dictionary containing plant configuration with:
-            - feed_source.parameters: flow_m3_h, ts_percent, temperature_C
-            - polymer_conditioner.parameters: jar_test_optimum_ppm, shear_factor, safety_factor
-            - dewatering_unit.parameters: max_flow_m3_h, capture_rate, cake_dryness_percent
-            - settings: polymer_price_per_kg, operating_hours_per_day
-        jar_test_optimum_ppm: Optional override for jar test dose.
-        jar_test_range: Optional dict with acceptable_range_min_ppm and acceptable_range_max_ppm.
+        plant_def: Legacy plant configuration dictionary
+
+    Returns:
+        Tuple of (nodes, edges) in graph format
+    """
+    nodes: List[Dict] = []
+    edges: List[Dict] = []
+
+    # Feed node
+    if "feed_source" in plant_def:
+        nodes.append({
+            "id": "feed-1",
+            "type": "feed",
+            "data": {"parameters": plant_def["feed_source"].get("parameters", {})}
+        })
+
+    prev_node = "feed-1"
+
+    # Optional pump node
+    if "transfer_pump" in plant_def and plant_def["transfer_pump"].get("parameters"):
+        nodes.append({
+            "id": "pump-1",
+            "type": "pump",
+            "data": {"parameters": plant_def["transfer_pump"]["parameters"]}
+        })
+        edges.append({
+            "id": "e-feed-pump",
+            "source": prev_node,
+            "sourceHandle": "output",
+            "target": "pump-1",
+            "targetHandle": "input"
+        })
+        prev_node = "pump-1"
+
+    # Polymer node
+    if "polymer_conditioner" in plant_def:
+        nodes.append({
+            "id": "polymer-1",
+            "type": "polymer",
+            "data": {"parameters": plant_def["polymer_conditioner"].get("parameters", {})}
+        })
+        edges.append({
+            "id": "e-to-polymer",
+            "source": prev_node,
+            "sourceHandle": "output",
+            "target": "polymer-1",
+            "targetHandle": "input"
+        })
+        prev_node = "polymer-1"
+
+    # Dewatering node
+    if "dewatering_unit" in plant_def:
+        nodes.append({
+            "id": "dewatering-1",
+            "type": "dewatering",
+            "data": {"parameters": plant_def["dewatering_unit"].get("parameters", {})}
+        })
+        edges.append({
+            "id": "e-to-dewatering",
+            "source": prev_node,
+            "sourceHandle": "output",
+            "target": "dewatering-1",
+            "targetHandle": "input"
+        })
+
+    return nodes, edges
+
+
+# =============================================================================
+# Main Graph Solver
+# =============================================================================
+
+def solve_graph(
+    nodes: List[Dict[str, Any]],
+    edges: List[Dict[str, Any]],
+    jar_test_optimum_ppm: Optional[float] = None,
+    jar_test_range: Optional[Dict[str, float]] = None,
+    settings: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Execute simulation using graph-based topology.
+
+    Args:
+        nodes: List of node dictionaries with id, type, data.parameters
+        edges: List of edge dictionaries with id, source, target, sourceHandle, targetHandle
+        jar_test_optimum_ppm: Optional override for jar test dose
+        jar_test_range: Optional dict with acceptable_range_min_ppm and acceptable_range_max_ppm
+        settings: Optional settings dict (polymer_price_per_kg, electricity_price_per_kwh, etc.)
 
     Returns:
         SimulationResult dictionary with:
             - success: bool
-            - streams: dict of stream data
+            - streams: dict of stream data (feed, conditioned, cake, liquid, pump_out)
             - kpis: dict of KPI values
             - warnings: list of warning messages
             - errors: list of error messages
@@ -68,176 +349,143 @@ def solve_plant(
 
     try:
         # ---------------------------------------------------------------------
-        # Validate plant definition structure
+        # 1. Validate graph structure
         # ---------------------------------------------------------------------
-        required_sections = ["feed_source", "polymer_conditioner", "dewatering_unit"]
-        for section in required_sections:
-            if section not in plant_definition:
-                result["errors"].append(f"Missing required section: {section}")
+        validation_errors = validate_graph(nodes, edges)
+        if validation_errors:
+            result["errors"] = validation_errors
+            return result
+
+        # ---------------------------------------------------------------------
+        # 2. Get topological order
+        # ---------------------------------------------------------------------
+        node_map = {n["id"]: n for n in nodes}
+        node_ids = [n["id"] for n in nodes]
+        connections = [
+            Connection(
+                e["source"],
+                e.get("sourceHandle", "output"),
+                e["target"],
+                e.get("targetHandle", "input"),
+            )
+            for e in edges
+        ]
+
+        order, error = GraphValidator.get_topological_order(node_ids, connections)
+        if order is None:
+            result["errors"].append(error)
+            return result
+
+        # ---------------------------------------------------------------------
+        # 3. Build incoming edge map
+        # ---------------------------------------------------------------------
+        incoming_map = build_incoming_edge_map(edges)
+
+        # ---------------------------------------------------------------------
+        # 4. Execute nodes in topological order
+        # ---------------------------------------------------------------------
+        streams: Dict[Tuple[str, str], Stream] = {}
+
+        for node_id in order:
+            node = node_map[node_id]
+            node_type = node["type"]
+            params = dict(node.get("data", {}).get("parameters", {}))
+
+            # Override jar_test_optimum_ppm if provided at request level
+            if node_type == "polymer" and jar_test_optimum_ppm is not None:
+                params["jar_test_optimum_ppm"] = jar_test_optimum_ppm
+
+            # Gather inputs from upstream edges
+            inputs: Dict[str, Stream] = {}
+            for edge in incoming_map.get(node_id, []):
+                source_key = (edge["source"], edge.get("sourceHandle", "output"))
+                target_handle = edge.get("targetHandle", "input")
+                if source_key in streams:
+                    inputs[target_handle] = streams[source_key]
+
+            # Execute node
+            executor = NODE_REGISTRY.get(node_type)
+            if not executor:
+                result["errors"].append(f"No executor for node type: {node_type}")
                 return result
-            if "parameters" not in plant_definition[section]:
-                result["errors"].append(f"Missing 'parameters' in {section}")
-                return result
 
-        feed_params = plant_definition["feed_source"]["parameters"]
-        polymer_params = plant_definition["polymer_conditioner"]["parameters"]
-        dewatering_params = plant_definition["dewatering_unit"]["parameters"]
-        settings = plant_definition.get("settings", {})
+            outputs = executor(params, inputs)
+
+            # Store outputs
+            for handle_id, stream in outputs.items():
+                streams[(node_id, handle_id)] = stream
 
         # ---------------------------------------------------------------------
-        # Extract parameters with defaults
+        # 5. Extract linear path streams for KPI computation
         # ---------------------------------------------------------------------
-        # Feed parameters
-        flow_m3_h = feed_params.get("flow_m3_h", 0)
-        ts_percent = feed_params.get("ts_percent", 0)
-        temperature_C = feed_params.get("temperature_C", 20.0)
-
-        # Polymer parameters
-        jar_dose_ppm = jar_test_optimum_ppm or polymer_params.get("jar_test_optimum_ppm", 0)
-        shear_factor = polymer_params.get("shear_factor", 1.0)
-        safety_factor = polymer_params.get("safety_factor", 1.0)
-
-        # Dewatering parameters
-        max_flow_m3_h = dewatering_params.get("max_flow_m3_h", 100)
-        capture_rate = dewatering_params.get("capture_rate", 0.95)
-        cake_dryness_percent = dewatering_params.get("cake_dryness_percent", 23.0)
-        polymer_split_cake = dewatering_params.get("polymer_split_cake", 0.3)
-
-        # Settings
-        polymer_price_per_kg = settings.get("polymer_price_per_kg")
-        electricity_price_per_kwh = settings.get("electricity_price_per_kwh")
-        operating_hours_per_day = settings.get("operating_hours_per_day", 24.0)
+        feed_stream = _find_stream_by_type(nodes, streams, "feed", "output")
+        conditioned_stream = _find_stream_by_type(nodes, streams, "polymer", "output")
+        cake_stream = _find_stream_by_type(nodes, streams, "dewatering", "cake")
+        liquid_stream = _find_stream_by_type(nodes, streams, "dewatering", "liquid")
+        pump_stream = _find_stream_by_type(nodes, streams, "pump", "output")
 
         # ---------------------------------------------------------------------
-        # Generate parameter validation warnings
+        # 5b. Validate required streams exist before KPI calculation
         # ---------------------------------------------------------------------
-        result["warnings"].extend(
-            validate_feed_parameters(flow_m3_h, ts_percent, temperature_C)
-        )
-        result["warnings"].extend(
-            validate_polymer_parameters(jar_dose_ppm, shear_factor, safety_factor)
-        )
-        result["warnings"].extend(
-            validate_dewatering_parameters(
-                flow_m3_h, max_flow_m3_h, capture_rate, cake_dryness_percent
+        required_streams = {
+            "feed": feed_stream,
+            "polymer (conditioned)": conditioned_stream,
+            "dewatering (cake)": cake_stream,
+            "dewatering (liquid)": liquid_stream,
+        }
+        missing = [name for name, stream in required_streams.items() if stream is None]
+        if missing:
+            result["errors"].append(
+                f"Incomplete graph: missing required streams from {', '.join(missing)}. "
+                "A complete simulation requires at minimum: feed → polymer → dewatering."
             )
-        )
-
-        # Check for dose outside typical range
-        effective_ppm = get_effective_dose_ppm(jar_dose_ppm, shear_factor, safety_factor)
-        if effective_ppm < 5:
-            result["warnings"].append(
-                f"Very low effective dose ({effective_ppm:.1f} ppm) - may result in poor flocculation"
-            )
-        elif effective_ppm > 50:
-            result["warnings"].append(
-                f"Very high effective dose ({effective_ppm:.1f} ppm) - verify jar test results"
-            )
-
-        # Check dose against jar test acceptable range
-        if jar_test_range:
-            range_min = jar_test_range.get("acceptable_range_min_ppm")
-            range_max = jar_test_range.get("acceptable_range_max_ppm")
-            if range_min is not None and effective_ppm < range_min:
-                result["warnings"].append(
-                    f"Effective dose ({effective_ppm:.1f} ppm) is below jar test acceptable range (min: {range_min:.1f} ppm)"
-                )
-            if range_max is not None and effective_ppm > range_max:
-                result["warnings"].append(
-                    f"Effective dose ({effective_ppm:.1f} ppm) exceeds jar test acceptable range (max: {range_max:.1f} ppm)"
-                )
+            return result
 
         # ---------------------------------------------------------------------
-        # Build feed stream
+        # 6. Compute KPIs
         # ---------------------------------------------------------------------
-        feed = make_feed_stream(
-            flow_m3_h=flow_m3_h,
-            ts_percent=ts_percent,
-            temperature_C=temperature_C,
-            stream_id="feed",
-        )
-
-        # ---------------------------------------------------------------------
-        # Optional Pump
-        # ---------------------------------------------------------------------
-        stream_to_condition = feed
         pump_power = 0.0
-        pump_out_stream = None
+        if pump_stream:
+            pump_power = getattr(pump_stream, "power_kW", 0.0)
 
-        pump_section = plant_definition.get("transfer_pump")
-        if pump_section and "parameters" in pump_section:
-            pump_params = pump_section["parameters"]
-            head_m = pump_params.get("head_m", 20.0)
-            eff_pump = pump_params.get("efficiency_pump", 0.7)
-            eff_motor = pump_params.get("efficiency_motor", 0.9)
-            
-            # Total efficiency
-            total_eff = eff_pump * eff_motor
-            
-            pump_out_stream = simulate_pump(
-                stream=feed,
-                head_m=head_m,
-                efficiency=total_eff,
-                output_stream_id="pump_out"
-            )
-            
-            stream_to_condition = pump_out_stream
-            pump_power = getattr(pump_out_stream, "power_kW", 0.0)
-
-        # ---------------------------------------------------------------------
-        # Apply polymer
-        # ---------------------------------------------------------------------
-        conditioned = apply_polymer(
-            feed=stream_to_condition,
-            jar_dose_ppm=jar_dose_ppm,
-            shear_factor=shear_factor,
-            safety_factor=safety_factor,
-            stream_id="conditioned",
-        )
-
-        # ---------------------------------------------------------------------
-        # Run dewatering
-        # ---------------------------------------------------------------------
-        cake, liquid = dewatering_unit(
-            feed=conditioned,
-            capture_rate=capture_rate,
-            cake_dryness_percent=cake_dryness_percent,
-            polymer_split_cake=polymer_split_cake,
-            cake_stream_id="cake",
-            liquid_stream_id="liquid",
-        )
-
-        # ---------------------------------------------------------------------
-        # Compute KPIs
-        # ---------------------------------------------------------------------
+        settings = settings or {}
         kpis = compute_kpis(
-            feed=feed,
-            conditioned=conditioned,
-            cake=cake,
-            liquid=liquid,
-            polymer_price_per_kg=polymer_price_per_kg,
-            electricity_price_per_kwh=electricity_price_per_kwh,
-            operating_hours_per_day=operating_hours_per_day,
+            feed=feed_stream,
+            conditioned=conditioned_stream,
+            cake=cake_stream,
+            liquid=liquid_stream,
+            polymer_price_per_kg=settings.get("polymer_price_per_kg"),
+            electricity_price_per_kwh=settings.get("electricity_price_per_kwh"),
+            operating_hours_per_day=settings.get("operating_hours_per_day", 24.0),
             pump_power_kW=pump_power,
         )
 
-        # Add KPI-based warnings
+        # ---------------------------------------------------------------------
+        # 7. Generate warnings
+        # ---------------------------------------------------------------------
+        result["warnings"].extend(
+            _generate_parameter_warnings(nodes, jar_test_optimum_ppm, jar_test_range)
+        )
         result["warnings"].extend(generate_kpi_warnings(kpis))
 
         # ---------------------------------------------------------------------
-        # Build result
+        # 8. Build response streams dict
         # ---------------------------------------------------------------------
-        result["success"] = True
-        result["streams"] = {
-            "feed": feed.to_dict(),
-            "conditioned": conditioned.to_dict(),
-            "cake": cake.to_dict(),
-            "liquid": liquid.to_dict(),
-        }
-        if pump_out_stream:
-            result["streams"]["pump_out"] = pump_out_stream.to_dict()
-            
+        response_streams: Dict[str, Any] = {}
+        if feed_stream:
+            response_streams["feed"] = feed_stream.to_dict()
+        if conditioned_stream:
+            response_streams["conditioned"] = conditioned_stream.to_dict()
+        if cake_stream:
+            response_streams["cake"] = cake_stream.to_dict()
+        if liquid_stream:
+            response_streams["liquid"] = liquid_stream.to_dict()
+        if pump_stream:
+            response_streams["pump_out"] = pump_stream.to_dict()
+
+        result["streams"] = response_streams
         result["kpis"] = kpis
+        result["success"] = True
 
         # Remove duplicate warnings
         result["warnings"] = list(dict.fromkeys(result["warnings"]))
@@ -251,6 +499,45 @@ def solve_plant(
 
     return result
 
+
+# =============================================================================
+# Backward Compatibility Alias
+# =============================================================================
+
+def solve_plant(
+    plant_definition: Dict[str, Any],
+    jar_test_optimum_ppm: Optional[float] = None,
+    jar_test_range: Optional[Dict[str, float]] = None,
+) -> Dict[str, Any]:
+    """
+    Run a complete dewatering simulation based on plant definition.
+
+    This is a backward-compatibility wrapper around solve_graph.
+    It converts the legacy plant_definition to graph format and executes.
+
+    Args:
+        plant_definition: Dictionary containing plant configuration
+        jar_test_optimum_ppm: Optional override for jar test dose
+        jar_test_range: Optional dict with acceptable_range_min_ppm and acceptable_range_max_ppm
+
+    Returns:
+        SimulationResult dictionary
+    """
+    nodes, edges = plant_definition_to_graph(plant_definition)
+    settings = plant_definition.get("settings", {})
+
+    return solve_graph(
+        nodes=nodes,
+        edges=edges,
+        jar_test_optimum_ppm=jar_test_optimum_ppm,
+        jar_test_range=jar_test_range,
+        settings=settings,
+    )
+
+
+# =============================================================================
+# Validation (for legacy /simulate/validate endpoint)
+# =============================================================================
 
 class ValidationError:
     """Structured validation error with path and message."""
