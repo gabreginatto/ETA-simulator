@@ -2,8 +2,8 @@
  * Form for editing Polymer Conditioner parameters.
  */
 import { useState, useCallback, useEffect } from "react";
-import { useStore } from "../../store/useStore";
-import { debounce } from "../../lib/utils";
+import { useStore, useErrorsForPath, useWarningsForPath } from "../../store/useStore";
+import { debounce, cn } from "../../lib/utils";
 import type { PolymerConditionerParams } from "../../types";
 
 interface PolymerFormProps {
@@ -16,6 +16,12 @@ export function PolymerForm({ nodeId, parameters }: PolymerFormProps) {
   const jarTests = useStore((state) => state.jarTests);
   const selectedJarTestId = useStore((state) => state.selectedJarTestId);
   const selectJarTest = useStore((state) => state.selectJarTest);
+
+  // Get validation errors/warnings from backend
+  const doseErrors = useErrorsForPath("polymer_conditioner.parameters.jar_test_optimum_ppm");
+  const shearErrors = useErrorsForPath("polymer_conditioner.parameters.shear_factor");
+  const safetyErrors = useErrorsForPath("polymer_conditioner.parameters.safety_factor");
+  const doseWarnings = useWarningsForPath("polymer_conditioner.parameters.jar_test_optimum_ppm");
 
   // Local state for immediate UI updates
   const [localParams, setLocalParams] = useState(parameters);
@@ -97,10 +103,23 @@ export function PolymerForm({ nodeId, parameters }: PolymerFormProps) {
             min={0}
             step={0.5}
             disabled={!!selectedJarTestId}
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className={cn(
+              "flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 disabled:bg-gray-100 disabled:cursor-not-allowed",
+              doseErrors.length > 0
+                ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                : doseWarnings.length > 0
+                ? "border-amber-500 focus:border-amber-500 focus:ring-amber-500"
+                : "border-gray-300 focus:border-violet-500 focus:ring-violet-500"
+            )}
           />
           <span className="text-sm text-gray-500 w-12">ppm</span>
         </div>
+        {doseErrors.length > 0 && (
+          <p className="text-xs text-red-500">{doseErrors[0].message}</p>
+        )}
+        {doseWarnings.length > 0 && doseErrors.length === 0 && (
+          <p className="text-xs text-amber-600">{doseWarnings[0].message}</p>
+        )}
       </div>
 
       {/* Shear Factor */}
@@ -116,13 +135,21 @@ export function PolymerForm({ nodeId, parameters }: PolymerFormProps) {
             min={1}
             max={2}
             step={0.1}
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            className={cn(
+              "flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1",
+              shearErrors.length > 0
+                ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                : "border-gray-300 focus:border-violet-500 focus:ring-violet-500"
+            )}
           />
           <span className="text-sm text-gray-500 w-12">×</span>
         </div>
         <p className="text-xs text-gray-500">
           Accounts for polymer degradation due to shear. Typical: 1.1-1.5
         </p>
+        {shearErrors.length > 0 && (
+          <p className="text-xs text-red-500">{shearErrors[0].message}</p>
+        )}
       </div>
 
       {/* Safety Factor */}
@@ -138,13 +165,21 @@ export function PolymerForm({ nodeId, parameters }: PolymerFormProps) {
             min={1}
             max={1.5}
             step={0.05}
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            className={cn(
+              "flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1",
+              safetyErrors.length > 0
+                ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                : "border-gray-300 focus:border-violet-500 focus:ring-violet-500"
+            )}
           />
           <span className="text-sm text-gray-500 w-12">×</span>
         </div>
         <p className="text-xs text-gray-500">
           Extra margin for variability. Typical: 1.05-1.15
         </p>
+        {safetyErrors.length > 0 && (
+          <p className="text-xs text-red-500">{safetyErrors[0].message}</p>
+        )}
       </div>
 
       {/* Effective Dose Calculation */}

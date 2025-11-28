@@ -17,6 +17,8 @@ from app.api.schemas import (
 )
 from app.db.database import get_db
 from app.db.models import ProjectModel
+from app.auth.security import get_current_user, User
+from app.config import settings
 
 router = APIRouter()
 
@@ -31,19 +33,24 @@ async def list_projects(
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(100, ge=1, le=100, description="Max items to return"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """List all projects with pagination."""
+    # Build base queries
+    query = select(ProjectModel).order_by(ProjectModel.updated_at.desc())
+    count_query = select(func.count(ProjectModel.id))
+
+    # Add tenant filter when auth is enabled
+    if settings.auth_enabled:
+        query = query.where(ProjectModel.tenant_id == current_user.tenant_id)
+        count_query = count_query.where(ProjectModel.tenant_id == current_user.tenant_id)
+
     # Get total count
-    count_result = await db.execute(select(func.count(ProjectModel.id)))
+    count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
 
-    # Get paginated items, sorted by updated_at descending
-    result = await db.execute(
-        select(ProjectModel)
-        .order_by(ProjectModel.updated_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
+    # Get paginated items
+    result = await db.execute(query.offset(skip).limit(limit))
     projects = result.scalars().all()
 
     return {
@@ -64,11 +71,16 @@ async def list_projects(
 async def get_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get a single project by ID."""
-    result = await db.execute(
-        select(ProjectModel).where(ProjectModel.id == project_id)
-    )
+    query = select(ProjectModel).where(ProjectModel.id == project_id)
+
+    # Add tenant filter when auth is enabled
+    if settings.auth_enabled:
+        query = query.where(ProjectModel.tenant_id == current_user.tenant_id)
+
+    result = await db.execute(query)
     project = result.scalar_one_or_none()
 
     if not project:
@@ -89,6 +101,7 @@ async def get_project(
 async def create_project(
     request: ProjectCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Create a new project."""
     project_id = str(uuid.uuid4())
@@ -100,6 +113,7 @@ async def create_project(
         description=request.description,
         plant_configuration=request.plant_configuration.model_dump(),
         jar_test_id=request.jar_test_id,
+        tenant_id=current_user.tenant_id,
         created_at=now,
         updated_at=now,
     )
@@ -124,11 +138,16 @@ async def update_project(
     project_id: str,
     request: ProjectUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Update an existing project."""
-    result = await db.execute(
-        select(ProjectModel).where(ProjectModel.id == project_id)
-    )
+    query = select(ProjectModel).where(ProjectModel.id == project_id)
+
+    # Add tenant filter when auth is enabled
+    if settings.auth_enabled:
+        query = query.where(ProjectModel.tenant_id == current_user.tenant_id)
+
+    result = await db.execute(query)
     project = result.scalar_one_or_none()
 
     if not project:
@@ -170,11 +189,16 @@ async def update_project(
 async def delete_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Delete a project."""
-    result = await db.execute(
-        select(ProjectModel).where(ProjectModel.id == project_id)
-    )
+    query = select(ProjectModel).where(ProjectModel.id == project_id)
+
+    # Add tenant filter when auth is enabled
+    if settings.auth_enabled:
+        query = query.where(ProjectModel.tenant_id == current_user.tenant_id)
+
+    result = await db.execute(query)
     project = result.scalar_one_or_none()
 
     if not project:

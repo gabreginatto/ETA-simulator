@@ -20,6 +20,7 @@ class ProjectModel(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     plant_configuration: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
     jar_test_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    tenant_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -33,6 +34,7 @@ class ProjectModel(Base):
             "description": self.description,
             "plant_configuration": self.plant_configuration,
             "jar_test_id": self.jar_test_id,
+            "tenant_id": self.tenant_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }

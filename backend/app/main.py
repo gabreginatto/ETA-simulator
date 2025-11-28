@@ -1,6 +1,7 @@
 """
 FastAPI main application entry point for SludgeSim.
 """
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,26 +11,38 @@ from app.api.routes import simulate, projects, jar_tests
 from app.db.database import init_db, close_db, AsyncSessionLocal
 from app.db.seed_data import seed_database, get_default_plant_definition
 
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper()),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup/shutdown events."""
     # Startup
-    print("Starting SludgeSim API...")
+    logger.info("Starting SludgeSim API...")
+
+    # Validate and log database configuration
+    settings.validate_and_log_database()
 
     # Initialize database tables
+    # Note: In production, use 'alembic upgrade head' before starting the app.
+    # For development, we still use create_all() for convenience.
     await init_db()
-    print("Database tables initialized")
+    logger.info("Database tables initialized")
 
     # Seed database with initial data
     async with AsyncSessionLocal() as session:
         await seed_database(session)
-        print("Seed data loaded")
+        logger.info("Seed data loaded")
 
     yield
 
     # Shutdown
-    print("Shutting down SludgeSim API...")
+    logger.info("Shutting down SludgeSim API...")
     await close_db()
 
 

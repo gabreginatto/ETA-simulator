@@ -1,7 +1,7 @@
 /**
  * Polymer Conditioner node for React Flow canvas.
  */
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { FlaskConical, AlertTriangle } from "lucide-react";
 import type { PolymerNodeData } from "../../../types";
@@ -9,6 +9,7 @@ import type { PolymerNodeData } from "../../../types";
 function PolymerNodeComponent({ data, selected }: NodeProps) {
   const nodeData = data as PolymerNodeData;
   const { parameters, effectiveDose, isDoseOutOfRange } = nodeData;
+  const [showTooltip, setShowTooltip] = useState(false);
 
   // Calculate effective dose if not provided
   const calculatedEffectiveDose =
@@ -21,13 +22,21 @@ function PolymerNodeComponent({ data, selected }: NodeProps) {
     <div
       className={`
         w-44 bg-gradient-to-br from-violet-50 to-purple-100
-        rounded-lg shadow-md border-2 transition-all duration-200
+        rounded-lg shadow-md border-2 transition-all duration-200 relative
         ${isDoseOutOfRange ? "border-yellow-500 shadow-yellow-200" : ""}
         ${selected && !isDoseOutOfRange ? "border-violet-500 shadow-lg shadow-violet-200" : ""}
         ${!selected && !isDoseOutOfRange ? "border-violet-200" : ""}
         hover:shadow-lg hover:border-violet-400
       `}
     >
+      {/* Warning Tooltip */}
+      {isDoseOutOfRange && showTooltip && (
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-yellow-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-50 shadow-lg">
+          Dose outside jar test range
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-yellow-800" />
+        </div>
+      )}
+
       {/* Input Handle */}
       <Handle
         type="target"
@@ -41,7 +50,11 @@ function PolymerNodeComponent({ data, selected }: NodeProps) {
         <FlaskConical className="w-5 h-5 text-violet-600" />
         <span className="text-sm font-semibold text-violet-800">Polymer</span>
         {isDoseOutOfRange && (
-          <AlertTriangle className="w-4 h-4 text-yellow-600 ml-auto" />
+          <AlertTriangle
+            className="w-4 h-4 text-yellow-600 ml-auto cursor-help"
+            onMouseEnter={() => setShowTooltip(true)}
+            onMouseLeave={() => setShowTooltip(false)}
+          />
         )}
       </div>
 

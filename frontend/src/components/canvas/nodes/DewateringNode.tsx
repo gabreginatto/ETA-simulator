@@ -1,7 +1,7 @@
 /**
  * Dewatering Unit node for React Flow canvas.
  */
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Factory, AlertTriangle } from "lucide-react";
 import type { DewateringNodeData } from "../../../types";
@@ -9,18 +9,27 @@ import type { DewateringNodeData } from "../../../types";
 function DewateringNodeComponent({ data, selected }: NodeProps) {
   const nodeData = data as DewateringNodeData;
   const { parameters, cakeStreamData, liquidStreamData, isOverCapacity } = nodeData;
+  const [showTooltip, setShowTooltip] = useState(false);
 
   return (
     <div
       className={`
         w-44 bg-gradient-to-br from-amber-50 to-orange-100
-        rounded-lg shadow-md border-2 transition-all duration-200
+        rounded-lg shadow-md border-2 transition-all duration-200 relative
         ${isOverCapacity ? "border-yellow-500 shadow-yellow-200" : ""}
         ${selected && !isOverCapacity ? "border-orange-500 shadow-lg shadow-orange-200" : ""}
         ${!selected && !isOverCapacity ? "border-orange-200" : ""}
         hover:shadow-lg hover:border-orange-400
       `}
     >
+      {/* Warning Tooltip */}
+      {isOverCapacity && showTooltip && (
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-yellow-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-50 shadow-lg">
+          Flow exceeds unit capacity
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-yellow-800" />
+        </div>
+      )}
+
       {/* Input Handle */}
       <Handle
         type="target"
@@ -34,7 +43,11 @@ function DewateringNodeComponent({ data, selected }: NodeProps) {
         <Factory className="w-5 h-5 text-orange-600" />
         <span className="text-sm font-semibold text-orange-800">Dewatering</span>
         {isOverCapacity && (
-          <AlertTriangle className="w-4 h-4 text-yellow-600 ml-auto" />
+          <AlertTriangle
+            className="w-4 h-4 text-yellow-600 ml-auto cursor-help"
+            onMouseEnter={() => setShowTooltip(true)}
+            onMouseLeave={() => setShowTooltip(false)}
+          />
         )}
       </div>
 

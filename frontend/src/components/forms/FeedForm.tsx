@@ -2,8 +2,8 @@
  * Form for editing Feed Source parameters.
  */
 import { useState, useCallback, useEffect } from "react";
-import { useStore } from "../../store/useStore";
-import { debounce } from "../../lib/utils";
+import { useStore, useErrorsForPath, useWarningsForPath } from "../../store/useStore";
+import { debounce, cn } from "../../lib/utils";
 import type { FeedSourceParams } from "../../types";
 
 interface FeedFormProps {
@@ -13,6 +13,13 @@ interface FeedFormProps {
 
 export function FeedForm({ nodeId, parameters }: FeedFormProps) {
   const updateNodeParameters = useStore((state) => state.updateNodeParameters);
+
+  // Get validation errors/warnings from backend for each field
+  const flowErrors = useErrorsForPath("feed_source.parameters.flow_m3_h");
+  const tsErrors = useErrorsForPath("feed_source.parameters.ts_percent");
+  const tempErrors = useErrorsForPath("feed_source.parameters.temperature_C");
+  const flowWarnings = useWarningsForPath("feed_source.parameters.flow_m3_h");
+  const tsWarnings = useWarningsForPath("feed_source.parameters.ts_percent");
 
   // Local state for immediate UI updates
   const [localParams, setLocalParams] = useState(parameters);
@@ -49,12 +56,25 @@ export function FeedForm({ nodeId, parameters }: FeedFormProps) {
             onChange={(e) => handleChange("flow_m3_h", parseFloat(e.target.value) || 0)}
             min={0}
             step={1}
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            className={cn(
+              "flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1",
+              flowErrors.length > 0
+                ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                : flowWarnings.length > 0
+                ? "border-amber-500 focus:border-amber-500 focus:ring-amber-500"
+                : "border-gray-300 focus:border-cyan-500 focus:ring-cyan-500"
+            )}
           />
           <span className="text-sm text-gray-500 w-12">m³/h</span>
         </div>
         {localParams.flow_m3_h < 0 && (
           <p className="text-xs text-red-500">Flow rate must be positive</p>
+        )}
+        {flowErrors.length > 0 && (
+          <p className="text-xs text-red-500">{flowErrors[0].message}</p>
+        )}
+        {flowWarnings.length > 0 && flowErrors.length === 0 && (
+          <p className="text-xs text-amber-600">{flowWarnings[0].message}</p>
         )}
       </div>
 
@@ -71,12 +91,25 @@ export function FeedForm({ nodeId, parameters }: FeedFormProps) {
             min={0}
             max={100}
             step={0.1}
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            className={cn(
+              "flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1",
+              tsErrors.length > 0
+                ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                : tsWarnings.length > 0
+                ? "border-amber-500 focus:border-amber-500 focus:ring-amber-500"
+                : "border-gray-300 focus:border-cyan-500 focus:ring-cyan-500"
+            )}
           />
           <span className="text-sm text-gray-500 w-12">%</span>
         </div>
         {(localParams.ts_percent < 0 || localParams.ts_percent > 100) && (
           <p className="text-xs text-red-500">TS must be between 0 and 100%</p>
+        )}
+        {tsErrors.length > 0 && (
+          <p className="text-xs text-red-500">{tsErrors[0].message}</p>
+        )}
+        {tsWarnings.length > 0 && tsErrors.length === 0 && (
+          <p className="text-xs text-amber-600">{tsWarnings[0].message}</p>
         )}
       </div>
 

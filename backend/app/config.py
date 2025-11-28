@@ -1,8 +1,11 @@
 """
 Configuration settings for SludgeSim backend.
 """
+import logging
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -39,6 +42,13 @@ class Settings(BaseSettings):
     gcp_project_id: str = ""
     gcp_project_number: str = ""
 
+    # Feature flags
+    enable_recycles: bool = False  # Enable recycle loop support in solver
+
+    # Auth settings (stub for now)
+    auth_enabled: bool = False
+    auth_token: Optional[str] = None  # Static token for stub auth
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -55,6 +65,32 @@ class Settings(BaseSettings):
         else:
             # Default to configured URL (SQLite for local dev)
             return self.database_url
+
+    def validate_and_log_database(self) -> None:
+        """Validate database configuration and log which database is in use."""
+        url = self.get_database_url()
+        if not url:
+            raise ValueError("DATABASE_URL is required but not configured")
+
+        # Log sanitized URL (hide password)
+        if "@" in url:
+            # Format: driver://user:pass@host/db - hide the password
+            parts = url.split("@")
+            prefix_parts = parts[0].split(":")
+            if len(prefix_parts) >= 3:
+                # Hide password
+                sanitized = f"{prefix_parts[0]}:{prefix_parts[1]}:***@{parts[1]}"
+            else:
+                sanitized = f"{parts[0]}@{parts[1]}"
+            logger.info(f"Database configured: {sanitized}")
+        else:
+            logger.info(f"Database configured: {url}")
+
+        # Log database type
+        if url.startswith("sqlite"):
+            logger.info("Using SQLite database (development mode)")
+        elif url.startswith("postgresql"):
+            logger.info("Using PostgreSQL database (production mode)")
 
 
 settings = Settings()
