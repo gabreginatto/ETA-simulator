@@ -10,6 +10,8 @@ import type {
   PumpNodeData,
   PolymerNodeData,
   DewateringNodeData,
+  ClarifierNodeData,
+  ThickenerNodeData,
   PlantConfiguration,
   Project,
   SimulationResult,
@@ -18,6 +20,8 @@ import type {
   PumpParams,
   PolymerConditionerParams,
   DewateringUnitParams,
+  ClarifierParams,
+  ThickenerParams,
   GraphNode,
   GraphEdge,
   EquipmentType,
@@ -171,7 +175,7 @@ interface PlantState {
   onEdgesChange: (changes: EdgeChange[]) => void;
   updateNodeParameters: (
     nodeId: string,
-    params: Partial<FeedSourceParams | PumpParams | PolymerConditionerParams | DewateringUnitParams>
+    params: Partial<FeedSourceParams | PumpParams | PolymerConditionerParams | DewateringUnitParams | ClarifierParams | ThickenerParams>
   ) => void;
   selectNode: (nodeId: string | null) => void;
   setPlantConfiguration: (config: PlantConfiguration) => void;
@@ -291,6 +295,22 @@ export const useStore = create<PlantState>()(
           } as DewateringUnitParams;
           state.plantConfiguration.dewatering_unit.parameters = updatedParams;
           (node.data as DewateringNodeData).parameters = updatedParams;
+        } else if (node.data.type === "clarifier") {
+          // Clarifier nodes - update node data directly (not stored in plantConfiguration)
+          const currentParams = (node.data as ClarifierNodeData).parameters;
+          const updatedParams = {
+            ...currentParams,
+            ...params,
+          } as ClarifierParams;
+          (node.data as ClarifierNodeData).parameters = updatedParams;
+        } else if (node.data.type === "thickener") {
+          // Thickener nodes - update node data directly (not stored in plantConfiguration)
+          const currentParams = (node.data as ThickenerNodeData).parameters;
+          const updatedParams = {
+            ...currentParams,
+            ...params,
+          } as ThickenerParams;
+          (node.data as ThickenerNodeData).parameters = updatedParams;
         }
 
         // Clear simulation result when parameters change
@@ -365,6 +385,14 @@ export const useStore = create<PlantState>()(
                 dewateringData.isOverCapacity =
                   result.streams.conditioned.volumetric_flow_m3_h > maxFlow;
               }
+            } else if (node.data.type === "clarifier") {
+              const clarifierData = node.data as ClarifierNodeData;
+              clarifierData.overflowStreamData = result.streams.clarifier_overflow;
+              clarifierData.underflowStreamData = result.streams.clarifier_underflow;
+            } else if (node.data.type === "thickener") {
+              const thickenerData = node.data as ThickenerNodeData;
+              thickenerData.thickenedStreamData = result.streams.thickened;
+              thickenerData.supernatantStreamData = result.streams.supernatant;
             }
           });
         }
@@ -464,6 +492,9 @@ export const useStore = create<PlantState>()(
         state.nodes.forEach((node: Node<EquipmentNodeData>) => {
           if (node.data.type === "feed") {
             (node.data as FeedNodeData).streamData = result.streams.feed;
+          } else if (node.data.type === "pump") {
+            (node.data as PumpNodeData).streamData = result.streams.pump_out || result.streams.feed;
+            (node.data as PumpNodeData).powerKW = result.kpis.pump_power_kW;
           } else if (node.data.type === "polymer") {
             (node.data as PolymerNodeData).streamData = result.streams.conditioned;
             (node.data as PolymerNodeData).effectiveDose = result.kpis.polymer_dose_ppm;
@@ -471,6 +502,14 @@ export const useStore = create<PlantState>()(
             const dewateringData = node.data as DewateringNodeData;
             dewateringData.cakeStreamData = result.streams.cake;
             dewateringData.liquidStreamData = result.streams.liquid;
+          } else if (node.data.type === "clarifier") {
+            const clarifierData = node.data as ClarifierNodeData;
+            clarifierData.overflowStreamData = result.streams.clarifier_overflow;
+            clarifierData.underflowStreamData = result.streams.clarifier_underflow;
+          } else if (node.data.type === "thickener") {
+            const thickenerData = node.data as ThickenerNodeData;
+            thickenerData.thickenedStreamData = result.streams.thickened;
+            thickenerData.supernatantStreamData = result.streams.supernatant;
           }
         });
       }),
