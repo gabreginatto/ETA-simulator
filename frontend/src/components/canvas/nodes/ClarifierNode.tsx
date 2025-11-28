@@ -6,8 +6,9 @@ import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Layers } from "lucide-react";
 import type { ClarifierNodeData } from "../../../types";
+import { NodeDeleteButton } from "./NodeDeleteButton";
 
-function ClarifierNodeComponent({ data, selected }: NodeProps) {
+function ClarifierNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ClarifierNodeData;
   const { parameters, overflowStreamData, underflowStreamData } = nodeData;
 
@@ -15,11 +16,13 @@ function ClarifierNodeComponent({ data, selected }: NodeProps) {
     <div
       className={`
         w-44 bg-gradient-to-br from-blue-50 to-sky-100
-        rounded-lg shadow-md border-2 transition-all duration-200 relative
+        rounded-lg shadow-md border-2 transition-all duration-200 relative overflow-visible
         ${selected ? "border-blue-500 shadow-lg shadow-blue-200" : "border-blue-200"}
         hover:shadow-lg hover:border-blue-400
       `}
     >
+      <NodeDeleteButton nodeId={id} nodeLabel="Clarifier" />
+
       {/* Input Handle */}
       <Handle
         type="target"
@@ -72,35 +75,21 @@ function ClarifierNodeComponent({ data, selected }: NodeProps) {
         )}
       </div>
 
-      {/* Output Handles */}
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-8">
-        {/* Overflow output - top (liquid) */}
-        <div className="relative">
-          <Handle
-            type="source"
-            position={Position.Right}
-            id="overflow"
-            className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white !top-0"
-            style={{ top: -16 }}
-          />
-          <span className="absolute right-4 -top-4 text-[10px] text-sky-600 font-medium whitespace-nowrap">
-            Overflow
-          </span>
-        </div>
-        {/* Underflow output - bottom (sludge) */}
-        <div className="relative">
-          <Handle
-            type="source"
-            position={Position.Right}
-            id="underflow"
-            className="!w-3 !h-3 !bg-blue-600 !border-2 !border-white !top-0"
-            style={{ top: 16 }}
-          />
-          <span className="absolute right-4 top-3 text-[10px] text-blue-700 font-medium whitespace-nowrap">
-            Underflow
-          </span>
-        </div>
-      </div>
+      {/* Output Handles - positioned at the right edge */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="overflow"
+        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white"
+        style={{ top: '30%' }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="underflow"
+        className="!w-3 !h-3 !bg-blue-600 !border-2 !border-white"
+        style={{ top: '70%' }}
+      />
     </div>
   );
 }

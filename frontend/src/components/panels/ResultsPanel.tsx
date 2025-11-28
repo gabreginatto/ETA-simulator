@@ -8,12 +8,14 @@ import {
   ChevronDown,
   ChevronUp,
   Save,
+  Check,
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { useStore, useSavedScenarios, useActiveComparisonSlot, usePlantConfiguration } from "../../store/useStore";
+import { useStore, useSavedScenarios, usePlantConfiguration } from "../../store/useStore";
 import { formatCurrency } from "../../lib/utils";
 import { Tooltip } from "../ui/Tooltip";
+import type { TCOBreakdown, SimulationResult, PlantConfiguration } from "../../types";
 
 // TCO card component
 function TCOCard({
@@ -56,21 +58,91 @@ function TCOCard({
 // Period selector for TCO
 type TCOPeriod = "day" | "month" | "year";
 
+// Scenario snapshot type (from store)
+interface ScenarioSnapshot {
+  name: string;
+  timestamp: number;
+  settings: PlantConfiguration["settings"];
+  result: SimulationResult;
+}
+
+// Comparison table component for A vs B scenarios
+function ComparisonTable({
+  scenarioA,
+  scenarioB,
+  tcoKey,
+  currency,
+}: {
+  scenarioA: ScenarioSnapshot;
+  scenarioB: ScenarioSnapshot;
+  tcoKey: "tco_per_1000m3" | "tco_per_day" | "tco_per_month" | "tco_per_year";
+  currency: string;
+}) {
+  const pillars = ["chemicals", "filtration", "sludge", "logistics", "total"] as const;
+
+  const getTcoValue = (result: SimulationResult, pillar: typeof pillars[number]): number => {
+    const tco = result.kpis[tcoKey] as TCOBreakdown | undefined;
+    return tco?.[pillar] ?? 0;
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead className="sticky top-0 bg-white z-10">
+          <tr className="bg-gray-50">
+            <th className="px-2 py-1.5 text-left font-medium text-gray-600">Pillar</th>
+            <th className="px-2 py-1.5 text-right font-medium text-emerald-600">A</th>
+            <th className="px-2 py-1.5 text-right font-medium text-violet-600">B</th>
+            <th className="px-2 py-1.5 text-right font-medium text-gray-600">Delta</th>
+            <th className="px-2 py-1.5 text-right font-medium text-gray-600">%</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {pillars.map((pillar) => {
+            const valA = getTcoValue(scenarioA.result, pillar);
+            const valB = getTcoValue(scenarioB.result, pillar);
+            const delta = valB - valA;
+            const pctChange = valA !== 0 ? (delta / valA) * 100 : 0;
+            const isTotal = pillar === "total";
+
+            // Color coding: red for increase (B > A), green for savings (B < A)
+            const deltaColor = delta < 0 ? "text-emerald-600" : delta > 0 ? "text-red-600" : "text-gray-500";
+
+            return (
+              <tr key={pillar} className={isTotal ? "font-semibold bg-gray-50" : ""}>
+                <td className="px-2 py-1.5 capitalize">{pillar}</td>
+                <td className="px-2 py-1.5 text-right">{formatCurrency(valA, currency)}</td>
+                <td className="px-2 py-1.5 text-right">{formatCurrency(valB, currency)}</td>
+                <td className={`px-2 py-1.5 text-right ${deltaColor}`}>
+                  {delta < 0 ? "−" : "+"}{formatCurrency(Math.abs(delta), currency)}
+                </td>
+                <td className={`px-2 py-1.5 text-right ${deltaColor}`}>
+                  {valA === 0 ? "—" : `${delta < 0 ? "−" : "+"}${Math.abs(pctChange).toFixed(1)}%`}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function ResultsPanel() {
   const simulationResult = useStore((state) => state.simulationResult);
   const isSimulating = useStore((state) => state.isSimulating);
   const plantConfiguration = usePlantConfiguration();
   const savedScenarios = useSavedScenarios();
-  const activeComparisonSlot = useActiveComparisonSlot();
   const saveScenarioToSlot = useStore((state) => state.saveScenarioToSlot);
   const clearScenarioSlot = useStore((state) => state.clearScenarioSlot);
-  const setActiveComparisonSlot = useStore((state) => state.setActiveComparisonSlot);
   const [isExpanded, setIsExpanded] = useState(true);
   const [tcoPeriod, setTcoPeriod] = useState<TCOPeriod>("month");
 
-  // Active scenario for comparison
-  const activeScenario = savedScenarios[activeComparisonSlot];
-  const hasAnyScenario = savedScenarios.A !== null || savedScenarios.B !== null;
+  // A vs B comparison - both must be saved
+  const scenarioA = savedScenarios.A;
+  const scenarioB = savedScenarios.B;
+  const hasBothScenarios = scenarioA !== null && scenarioB !== null;
+  const hasAnyScenario = scenarioA !== null || scenarioB !== null;
 
   const currency = plantConfiguration.settings.currency || "BRL";
 
@@ -408,22 +480,26 @@ export function ResultsPanel() {
                   <button
                     onClick={() => saveScenarioToSlot("A", "Scenario A")}
                     className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
-                      savedScenarios.A ? "text-emerald-600 hover:bg-emerald-50" : "text-blue-600 hover:bg-blue-50"
+                      scenarioA
+                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                        : "text-gray-600 hover:bg-gray-100"
                     }`}
-                    title={savedScenarios.A ? "Overwrite Scenario A" : "Save as Scenario A"}
+                    title={scenarioA ? "Overwrite Scenario A" : "Save as Scenario A"}
                   >
-                    <Save className="w-3 h-3" />
-                    {savedScenarios.A ? "A" : "Save A"}
+                    {scenarioA ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                    {scenarioA ? "A Saved" : "Save A"}
                   </button>
                   <button
                     onClick={() => saveScenarioToSlot("B", "Scenario B")}
                     className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
-                      savedScenarios.B ? "text-violet-600 hover:bg-violet-50" : "text-blue-600 hover:bg-blue-50"
+                      scenarioB
+                        ? "bg-violet-100 text-violet-700 hover:bg-violet-200"
+                        : "text-gray-600 hover:bg-gray-100"
                     }`}
-                    title={savedScenarios.B ? "Overwrite Scenario B" : "Save as Scenario B"}
+                    title={scenarioB ? "Overwrite Scenario B" : "Save as Scenario B"}
                   >
-                    <Save className="w-3 h-3" />
-                    {savedScenarios.B ? "B" : "Save B"}
+                    {scenarioB ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                    {scenarioB ? "B Saved" : "Save B"}
                   </button>
                 </div>
               </div>
@@ -508,99 +584,85 @@ export function ResultsPanel() {
                     })()}
                   </div>
 
-                  {/* Scenario Comparison */}
-                  {hasAnyScenario && kpis.tco_per_1000m3 && (
-                    <div className="pt-3 border-t border-gray-100">
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <h5 className="text-xs font-semibold text-gray-700">Scenario Comparison (per 1,000 m³)</h5>
-                          {/* Slot selector tabs */}
-                          <div className="flex items-center gap-1 mt-1">
-                            {savedScenarios.A && (
-                              <button
-                                onClick={() => setActiveComparisonSlot("A")}
-                                className={`px-2 py-0.5 text-xs rounded ${
-                                  activeComparisonSlot === "A"
-                                    ? "bg-emerald-600 text-white"
-                                    : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                                }`}
-                              >
-                                A: {new Date(savedScenarios.A.timestamp).toLocaleDateString()}
-                              </button>
-                            )}
-                            {savedScenarios.B && (
-                              <button
-                                onClick={() => setActiveComparisonSlot("B")}
-                                className={`px-2 py-0.5 text-xs rounded ${
-                                  activeComparisonSlot === "B"
-                                    ? "bg-violet-600 text-white"
-                                    : "bg-violet-100 text-violet-700 hover:bg-violet-200"
-                                }`}
-                              >
-                                B: {new Date(savedScenarios.B.timestamp).toLocaleDateString()}
-                              </button>
-                            )}
-                          </div>
+                  {/* A vs B Scenario Comparison - Shows when both scenarios are saved */}
+                  {hasBothScenarios && scenarioA && scenarioB && (
+                    <div className="pt-3 border-t border-gray-100 space-y-4">
+                      {/* Header with Clear buttons */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <h5 className="text-xs font-semibold text-gray-700">Scenario Comparison</h5>
+                          <span className="text-xs text-gray-500">
+                            A: {new Date(scenarioA.timestamp).toLocaleDateString()} vs B: {new Date(scenarioB.timestamp).toLocaleDateString()}
+                          </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          {activeScenario && (
-                            <button
-                              onClick={() => clearScenarioSlot(activeComparisonSlot)}
-                              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
-                              title={`Clear Scenario ${activeComparisonSlot}`}
-                            >
-                              <X className="w-3 h-3" />
-                              Clear {activeComparisonSlot}
-                            </button>
-                          )}
+                          <button
+                            onClick={() => clearScenarioSlot("A")}
+                            className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500"
+                            title="Clear Scenario A"
+                          >
+                            <X className="w-3 h-3" />
+                            Clear A
+                          </button>
+                          <button
+                            onClick={() => clearScenarioSlot("B")}
+                            className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500"
+                            title="Clear Scenario B"
+                          >
+                            <X className="w-3 h-3" />
+                            Clear B
+                          </button>
                         </div>
                       </div>
-                      {activeScenario ? (
-                        <>
-                          <div className="text-xs text-gray-500 mb-2">
-                            Comparing against {activeScenario.name} • {activeScenario.settings.currency} • {activeScenario.settings.operating_hours_per_day || 24}h/day
+
+                      {/* Per 1,000 m³ (unitized) comparison table */}
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <h6 className="text-xs font-medium text-gray-600 mb-2">Per 1,000 m³ (unitized)</h6>
+                        <ComparisonTable
+                          scenarioA={scenarioA}
+                          scenarioB={scenarioB}
+                          tcoKey="tco_per_1000m3"
+                          currency={currency}
+                        />
+                      </div>
+
+                      {/* Total Plant Cost comparison table with period toggle */}
+                      <div className="bg-white p-3 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <h6 className="text-xs font-medium text-gray-600">Total Plant Cost</h6>
+                          <div className="flex gap-1">
+                            {(["day", "month", "year"] as TCOPeriod[]).map((period) => (
+                              <button
+                                key={period}
+                                onClick={() => setTcoPeriod(period)}
+                                className={`px-2 py-0.5 text-xs rounded ${
+                                  tcoPeriod === period
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                }`}
+                              >
+                                {period === "day" ? "Day" : period === "month" ? "Month" : "Year"}
+                              </button>
+                            ))}
                           </div>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                              <thead className="sticky top-0 bg-white z-10">
-                                <tr className="bg-gray-50">
-                                  <th className="px-2 py-1 text-left font-medium text-gray-600">Pillar</th>
-                                  <th className="px-2 py-1 text-right font-medium text-gray-600">{activeComparisonSlot}</th>
-                                  <th className="px-2 py-1 text-right font-medium text-gray-600">Current</th>
-                                  <th className="px-2 py-1 text-right font-medium text-gray-600">Delta</th>
-                                  <th className="px-2 py-1 text-right font-medium text-gray-600">%</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100">
-                                {(["chemicals", "filtration", "sludge", "logistics", "total"] as const).map((pillar) => {
-                                  const savedVal = activeScenario.result.kpis.tco_per_1000m3?.[pillar] || 0;
-                                  const currentVal = kpis.tco_per_1000m3?.[pillar] || 0;
-                                  const delta = currentVal - savedVal;
-                                  const pctChange = savedVal !== 0 ? (delta / savedVal) * 100 : 0;
-                                  const isTotal = pillar === "total";
-                                  return (
-                                    <tr key={pillar} className={isTotal ? "font-semibold bg-gray-50" : ""}>
-                                      <td className="px-2 py-1 capitalize">{pillar}</td>
-                                      <td className="px-2 py-1 text-right">{formatCurrency(savedVal, currency)}</td>
-                                      <td className="px-2 py-1 text-right">{formatCurrency(currentVal, currency)}</td>
-                                      <td className={`px-2 py-1 text-right ${delta < 0 ? "text-emerald-600" : delta > 0 ? "text-red-600" : ""}`}>
-                                        {delta < 0 ? "−" : "+"}{formatCurrency(Math.abs(delta), currency)}
-                                      </td>
-                                      <td className={`px-2 py-1 text-right ${delta < 0 ? "text-emerald-600" : delta > 0 ? "text-red-600" : ""}`}>
-                                        {delta < 0 ? "−" : "+"}{Math.abs(pctChange).toFixed(1)}%
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="text-xs text-gray-500 italic">
-                          Select a scenario tab above to compare
                         </div>
-                      )}
+                        <ComparisonTable
+                          scenarioA={scenarioA}
+                          scenarioB={scenarioB}
+                          tcoKey={`tco_per_${tcoPeriod}` as "tco_per_day" | "tco_per_month" | "tco_per_year"}
+                          currency={currency}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prompt to save missing scenario */}
+                  {!hasBothScenarios && hasAnyScenario && (
+                    <div className="pt-3 border-t border-gray-100">
+                      <div className="text-xs text-gray-500 italic p-3 bg-gray-50 rounded-md text-center">
+                        {!scenarioA && scenarioB && "Save Scenario A to compare against B"}
+                        {scenarioA && !scenarioB && "Save Scenario B to compare against A"}
+                      </div>
                     </div>
                   )}
                 </>

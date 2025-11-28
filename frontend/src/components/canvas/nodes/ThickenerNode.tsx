@@ -6,8 +6,9 @@ import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { CircleDot } from "lucide-react";
 import type { ThickenerNodeData } from "../../../types";
+import { NodeDeleteButton } from "./NodeDeleteButton";
 
-function ThickenerNodeComponent({ data, selected }: NodeProps) {
+function ThickenerNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ThickenerNodeData;
   const { parameters, thickenedStreamData, supernatantStreamData } = nodeData;
 
@@ -15,11 +16,13 @@ function ThickenerNodeComponent({ data, selected }: NodeProps) {
     <div
       className={`
         w-44 bg-gradient-to-br from-emerald-50 to-green-100
-        rounded-lg shadow-md border-2 transition-all duration-200 relative
+        rounded-lg shadow-md border-2 transition-all duration-200 relative overflow-visible
         ${selected ? "border-emerald-500 shadow-lg shadow-emerald-200" : "border-emerald-200"}
         hover:shadow-lg hover:border-emerald-400
       `}
     >
+      <NodeDeleteButton nodeId={id} nodeLabel="Thickener" />
+
       {/* Input Handle */}
       <Handle
         type="target"
@@ -72,35 +75,21 @@ function ThickenerNodeComponent({ data, selected }: NodeProps) {
         )}
       </div>
 
-      {/* Output Handles */}
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-8">
-        {/* Thickened output - top (sludge) */}
-        <div className="relative">
-          <Handle
-            type="source"
-            position={Position.Right}
-            id="thickened"
-            className="!w-3 !h-3 !bg-emerald-600 !border-2 !border-white !top-0"
-            style={{ top: -16 }}
-          />
-          <span className="absolute right-4 -top-4 text-[10px] text-emerald-700 font-medium whitespace-nowrap">
-            Thickened
-          </span>
-        </div>
-        {/* Supernatant output - bottom (liquid) */}
-        <div className="relative">
-          <Handle
-            type="source"
-            position={Position.Right}
-            id="supernatant"
-            className="!w-3 !h-3 !bg-teal-500 !border-2 !border-white !top-0"
-            style={{ top: 16 }}
-          />
-          <span className="absolute right-4 top-3 text-[10px] text-teal-600 font-medium whitespace-nowrap">
-            Supernatant
-          </span>
-        </div>
-      </div>
+      {/* Output Handles - positioned at the right edge */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="thickened"
+        className="!w-3 !h-3 !bg-emerald-600 !border-2 !border-white"
+        style={{ top: '30%' }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="supernatant"
+        className="!w-3 !h-3 !bg-teal-500 !border-2 !border-white"
+        style={{ top: '70%' }}
+      />
     </div>
   );
 }

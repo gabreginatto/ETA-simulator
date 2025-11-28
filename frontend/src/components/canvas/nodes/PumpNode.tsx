@@ -5,20 +5,23 @@ import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Activity, Zap } from "lucide-react";
 import type { PumpNodeData } from "../../../types";
+import { NodeDeleteButton } from "./NodeDeleteButton";
 
-function PumpNodeComponent({ data, selected }: NodeProps) {
+function PumpNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as PumpNodeData;
   const { parameters, powerKW } = nodeData;
 
   return (
     <div
       className={`
-        w-44 bg-gradient-to-br from-blue-50 to-cyan-100
+        relative overflow-visible w-44 bg-gradient-to-br from-blue-50 to-cyan-100
         rounded-lg shadow-md border-2 transition-all duration-200
         ${selected ? "border-cyan-500 shadow-lg shadow-cyan-200" : "border-cyan-200"}
         hover:shadow-lg hover:border-cyan-400
       `}
     >
+      <NodeDeleteButton nodeId={id} nodeLabel="Transfer Pump" />
+
       {/* Input Handle */}
       <Handle
         type="target"

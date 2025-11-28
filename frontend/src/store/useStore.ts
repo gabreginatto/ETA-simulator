@@ -78,11 +78,13 @@ const DEFAULT_PLANT_CONFIG: PlantConfiguration = {
 };
 
 // Default nodes for the canvas
+// Note: measured property is needed for MiniMap to render nodes correctly in React Flow v12
 const createDefaultNodes = (): Node<EquipmentNodeData>[] => [
   {
     id: "feed-1",
     type: "feed",
     position: { x: 50, y: 200 },
+    measured: { width: 176, height: 100 },
     data: {
       type: "feed",
       label: "Feed Source",
@@ -93,6 +95,7 @@ const createDefaultNodes = (): Node<EquipmentNodeData>[] => [
     id: "pump-1",
     type: "pump",
     position: { x: 300, y: 200 },
+    measured: { width: 176, height: 120 },
     data: {
       type: "pump",
       label: "Transfer Pump",
@@ -103,6 +106,7 @@ const createDefaultNodes = (): Node<EquipmentNodeData>[] => [
     id: "polymer-1",
     type: "polymer",
     position: { x: 550, y: 200 },
+    measured: { width: 176, height: 140 },
     data: {
       type: "polymer",
       label: "Polymer Conditioner",
@@ -113,6 +117,7 @@ const createDefaultNodes = (): Node<EquipmentNodeData>[] => [
     id: "dewatering-1",
     type: "dewatering",
     position: { x: 800, y: 200 },
+    measured: { width: 176, height: 140 },
     data: {
       type: "dewatering",
       label: "Dewatering Unit",
@@ -219,6 +224,11 @@ interface PlantState {
   clearScenarioSlot: (slot: "A" | "B") => void;
   setActiveComparisonSlot: (slot: "A" | "B") => void;
   swapScenarioSlots: () => void;
+
+  // Dynamic node/edge actions
+  addNode: (type: EquipmentType, position: { x: number; y: number }) => string;
+  deleteNode: (nodeId: string) => void;
+  addEdge: (sourceId: string, targetId: string, sourceHandle: string, targetHandle: string) => void;
 }
 
 export const useStore = create<PlantState>()(
@@ -260,7 +270,8 @@ export const useStore = create<PlantState>()(
         state.edges = edges;
       }),
 
-    // Handle React Flow node changes (position, selection, etc.)
+    // Handle React Flow node changes (position, etc.)
+    // Note: Selection is handled separately via onSelectionChange in FlowCanvas
     onNodesChange: (changes: NodeChange[]) =>
       set((state) => {
         changes.forEach((change: NodeChange) => {
@@ -270,9 +281,9 @@ export const useStore = create<PlantState>()(
               node.position = change.position;
             }
           }
-          if (change.type === "select" && "selected" in change) {
-            state.selectedNodeId = change.selected ? change.id : null;
-          }
+          // Selection changes are intentionally not handled here - they're managed
+          // via handleSelectionChange in FlowCanvas to prevent panel from closing
+          // when interacting with form inputs
         });
       }),
 
@@ -576,8 +587,16 @@ export const useStore = create<PlantState>()(
             settings: { ...state.plantConfiguration.settings },
             result: state.simulationResult,
           };
-          // Auto-switch to compare against the newly saved slot
-          state.activeComparisonSlot = slot;
+          // Only auto-switch to slot A when saving A (the baseline).
+          // When saving B, keep comparing against A so user can see A vs B difference.
+          if (slot === "A") {
+            state.activeComparisonSlot = "A";
+          }
+          // If saving B and no baseline (A) exists yet, use B as baseline
+          else if (slot === "B" && !state.savedScenarios.A) {
+            state.activeComparisonSlot = "B";
+          }
+          // Otherwise, keep the current comparison baseline (typically A)
         }
       }),
 
@@ -606,6 +625,156 @@ export const useStore = create<PlantState>()(
         const temp = state.savedScenarios.A;
         state.savedScenarios.A = state.savedScenarios.B;
         state.savedScenarios.B = temp;
+      }),
+
+    // Add a new node at the specified position
+    addNode: (type, position) => {
+      let newNodeId = "";
+      set((state) => {
+        // Generate unique ID based on type and count
+        const existingCount = state.nodes.filter(
+          (n: Node<EquipmentNodeData>) => n.data.type === type
+        ).length;
+        newNodeId = `${type}-${existingCount + 1}-${Date.now()}`;
+
+        // Create default parameters based on type
+        let data: EquipmentNodeData;
+        switch (type) {
+          case "feed":
+            data = {
+              type: "feed",
+              label: "Feed Source",
+              parameters: {
+                flow_m3_h: 100.0,
+                ts_percent: 3.0,
+                temperature_C: 20.0,
+              },
+            } as FeedNodeData;
+            break;
+          case "pump":
+            data = {
+              type: "pump",
+              label: "Transfer Pump",
+              parameters: {
+                head_m: 20.0,
+                efficiency_pump: 0.7,
+                efficiency_motor: 0.9,
+              },
+            } as PumpNodeData;
+            break;
+          case "polymer":
+            data = {
+              type: "polymer",
+              label: "Polymer",
+              parameters: {
+                jar_test_optimum_ppm: 15.0,
+                shear_factor: 1.2,
+                safety_factor: 1.1,
+              },
+            } as PolymerNodeData;
+            break;
+          case "clarifier":
+            data = {
+              type: "clarifier",
+              label: "Clarifier",
+              parameters: {
+                underflow_rate_m3_h: 10.0,
+                capture_rate: 0.85,
+              },
+            } as ClarifierNodeData;
+            break;
+          case "thickener":
+            data = {
+              type: "thickener",
+              label: "Thickener",
+              parameters: {
+                target_thickened_ts_percent: 5.0,
+                capture_rate: 0.90,
+              },
+            } as ThickenerNodeData;
+            break;
+          case "dewatering":
+            data = {
+              type: "dewatering",
+              label: "Dewatering",
+              parameters: {
+                max_flow_m3_h: 150.0,
+                capture_rate: 0.95,
+                cake_dryness_percent: 23.0,
+                polymer_split_cake: 0.3,
+              },
+            } as DewateringNodeData;
+            break;
+          default:
+            throw new Error(`Unknown equipment type: ${type}`);
+        }
+
+        const newNode: Node<EquipmentNodeData> = {
+          id: newNodeId,
+          type,
+          position,
+          measured: { width: 176, height: 120 },
+          data,
+        };
+
+        state.nodes.push(newNode);
+        state.simulationResult = null; // Clear simulation when topology changes
+      });
+      return newNodeId;
+    },
+
+    // Delete a node and its connected edges
+    deleteNode: (nodeId) =>
+      set((state) => {
+        // Don't allow deleting the last node of certain types if needed
+        const nodeToDelete = state.nodes.find(
+          (n: Node<EquipmentNodeData>) => n.id === nodeId
+        );
+        if (!nodeToDelete) return;
+
+        // Remove the node
+        state.nodes = state.nodes.filter(
+          (n: Node<EquipmentNodeData>) => n.id !== nodeId
+        );
+
+        // Remove all edges connected to this node
+        state.edges = state.edges.filter(
+          (e: Edge) => e.source !== nodeId && e.target !== nodeId
+        );
+
+        // Clear selection if deleted node was selected
+        if (state.selectedNodeId === nodeId) {
+          state.selectedNodeId = null;
+        }
+
+        // Clear simulation result when topology changes
+        state.simulationResult = null;
+      }),
+
+    // Add a new edge between nodes
+    addEdge: (sourceId, targetId, sourceHandle, targetHandle) =>
+      set((state) => {
+        // Check if edge already exists
+        const exists = state.edges.some(
+          (e: Edge) =>
+            e.source === sourceId &&
+            e.target === targetId &&
+            e.sourceHandle === sourceHandle &&
+            e.targetHandle === targetHandle
+        );
+        if (exists) return;
+
+        const newEdge: Edge = {
+          id: `${sourceId}-${sourceHandle}-${targetId}-${targetHandle}`,
+          source: sourceId,
+          target: targetId,
+          sourceHandle,
+          targetHandle,
+          type: "stream",
+        };
+
+        state.edges.push(newEdge);
+        state.simulationResult = null; // Clear simulation when topology changes
       }),
   }))
 );

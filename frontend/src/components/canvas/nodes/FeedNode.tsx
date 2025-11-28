@@ -5,20 +5,23 @@ import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Droplets } from "lucide-react";
 import type { FeedNodeData } from "../../../types";
+import { NodeDeleteButton } from "./NodeDeleteButton";
 
-function FeedNodeComponent({ data, selected }: NodeProps) {
+function FeedNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as FeedNodeData;
   const { parameters, streamData } = nodeData;
 
   return (
     <div
       className={`
-        w-44 bg-gradient-to-br from-cyan-50 to-blue-100
+        relative overflow-visible w-44 bg-gradient-to-br from-cyan-50 to-blue-100
         rounded-lg shadow-md border-2 transition-all duration-200
         ${selected ? "border-cyan-500 shadow-lg shadow-cyan-200" : "border-cyan-200"}
         hover:shadow-lg hover:border-cyan-400
       `}
     >
+      <NodeDeleteButton nodeId={id} nodeLabel="Feed Source" />
+
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-cyan-200 bg-cyan-500/10 rounded-t-lg">
         <Droplets className="w-5 h-5 text-cyan-600" />

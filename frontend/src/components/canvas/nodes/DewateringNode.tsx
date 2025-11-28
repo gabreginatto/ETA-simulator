@@ -5,8 +5,9 @@ import { memo, useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Factory, AlertTriangle } from "lucide-react";
 import type { DewateringNodeData } from "../../../types";
+import { NodeDeleteButton } from "./NodeDeleteButton";
 
-function DewateringNodeComponent({ data, selected }: NodeProps) {
+function DewateringNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as DewateringNodeData;
   const { parameters, cakeStreamData, liquidStreamData, isOverCapacity } = nodeData;
   const [showTooltip, setShowTooltip] = useState(false);
@@ -15,13 +16,15 @@ function DewateringNodeComponent({ data, selected }: NodeProps) {
     <div
       className={`
         w-44 bg-gradient-to-br from-amber-50 to-orange-100
-        rounded-lg shadow-md border-2 transition-all duration-200 relative
+        rounded-lg shadow-md border-2 transition-all duration-200 relative overflow-visible
         ${isOverCapacity ? "border-yellow-500 shadow-yellow-200" : ""}
         ${selected && !isOverCapacity ? "border-orange-500 shadow-lg shadow-orange-200" : ""}
         ${!selected && !isOverCapacity ? "border-orange-200" : ""}
         hover:shadow-lg hover:border-orange-400
       `}
     >
+      <NodeDeleteButton nodeId={id} nodeLabel="Dewatering" />
+
       {/* Warning Tooltip */}
       {isOverCapacity && showTooltip && (
         <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-yellow-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-50 shadow-lg">
@@ -97,35 +100,21 @@ function DewateringNodeComponent({ data, selected }: NodeProps) {
         )}
       </div>
 
-      {/* Output Handles */}
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-8">
-        {/* Cake output - top */}
-        <div className="relative">
-          <Handle
-            type="source"
-            position={Position.Right}
-            id="cake_out"
-            className="!w-3 !h-3 !bg-amber-600 !border-2 !border-white !top-0"
-            style={{ top: -16 }}
-          />
-          <span className="absolute right-4 -top-4 text-[10px] text-amber-600 font-medium whitespace-nowrap">
-            Cake
-          </span>
-        </div>
-        {/* Liquid output - bottom */}
-        <div className="relative">
-          <Handle
-            type="source"
-            position={Position.Right}
-            id="liquid_out"
-            className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white !top-0"
-            style={{ top: 16 }}
-          />
-          <span className="absolute right-4 top-3 text-[10px] text-sky-600 font-medium whitespace-nowrap">
-            Liquid
-          </span>
-        </div>
-      </div>
+      {/* Output Handles - positioned at the right edge */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="cake_out"
+        className="!w-3 !h-3 !bg-amber-600 !border-2 !border-white"
+        style={{ top: '30%' }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="liquid_out"
+        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white"
+        style={{ top: '70%' }}
+      />
     </div>
   );
 }

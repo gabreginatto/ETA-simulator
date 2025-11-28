@@ -1,13 +1,14 @@
 /**
  * Main React Flow canvas component for the plant layout.
  */
-import { useCallback } from "react";
+import { useCallback, useRef, DragEvent } from "react";
 import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   BackgroundVariant,
+  useReactFlow,
+  ReactFlowProvider,
   type OnNodesChange,
   type OnEdgesChange,
   type OnConnect,
@@ -25,6 +26,7 @@ import { DewateringNode } from "./nodes/DewateringNode";
 import { ClarifierNode } from "./nodes/ClarifierNode";
 import { ThickenerNode } from "./nodes/ThickenerNode";
 import { StreamEdge } from "./edges/StreamEdge";
+import { EquipmentToolbar } from "./EquipmentToolbar";
 import {
   getPortType,
   isConnectionValid,
@@ -46,21 +48,32 @@ const edgeTypes: EdgeTypes = {
   stream: StreamEdge,
 };
 
-export function FlowCanvas() {
+// Inner component that uses ReactFlow hooks (must be inside ReactFlowProvider)
+function FlowCanvasInner() {
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const { screenToFlowPosition } = useReactFlow();
+
   const nodes = useStore((state) => state.nodes);
   const edges = useStore((state) => state.edges);
   const onNodesChange = useStore((state) => state.onNodesChange);
   const onEdgesChange = useStore((state) => state.onEdgesChange);
   const selectNode = useStore((state) => state.selectNode);
+  const addNode = useStore((state) => state.addNode);
+  const addEdge = useStore((state) => state.addEdge);
+  const deleteNode = useStore((state) => state.deleteNode);
+  const selectedNodeId = useStore((state) => state.selectedNodeId);
 
   // Handle node selection
+  // Note: We only update selection when a node IS selected, not when all nodes are deselected.
+  // This prevents the properties panel from closing when clicking on form inputs.
+  // Users can close the panel explicitly using the X button.
   const handleSelectionChange = useCallback(
     ({ nodes: selectedNodes }: { nodes: any[] }) => {
       if (selectedNodes.length > 0) {
         selectNode(selectedNodes[0].id);
-      } else {
-        selectNode(null);
       }
+      // Don't clear selection when no nodes are selected - this prevents
+      // the panel from closing when interacting with the properties panel
     },
     [selectNode]
   );
@@ -82,7 +95,6 @@ export function FlowCanvas() {
 
   /**
    * Validates if a connection between two nodes is allowed based on port types.
-   * This is used to prevent invalid edge creation when nodesConnectable is enabled.
    */
   const isValidConnectionFn = useCallback(
     (connection: Connection | { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) => {
@@ -119,7 +131,6 @@ export function FlowCanvas() {
 
   /**
    * Handler for when a new connection is made.
-   * Currently disabled (nodesConnectable=false), but prepared for future use.
    */
   const handleConnect: OnConnect = useCallback(
     (connection) => {
@@ -129,14 +140,57 @@ export function FlowCanvas() {
         return;
       }
 
-      // In the future, this would add the edge to the graph
-      console.log("Connection made (not persisted - nodesConnectable=false):", connection);
+      // Add the edge to the store
+      if (connection.source && connection.target && connection.sourceHandle && connection.targetHandle) {
+        addEdge(connection.source, connection.target, connection.sourceHandle, connection.targetHandle);
+      }
     },
-    [isValidConnectionFn]
+    [isValidConnectionFn, addEdge]
+  );
+
+  // Handle drag over for drop zone
+  const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }, []);
+
+  // Handle drop to add new node
+  const onDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+
+      const type = event.dataTransfer.getData("application/reactflow") as EquipmentType;
+      if (!type) return;
+
+      // Get position from drop location
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      addNode(type, position);
+    },
+    [screenToFlowPosition, addNode]
+  );
+
+  // Handle keyboard delete
+  const onKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedNodeId) {
+        deleteNode(selectedNodeId);
+      }
+    },
+    [selectedNodeId, deleteNode]
   );
 
   return (
-    <div className="w-full h-full">
+    <div
+      ref={reactFlowWrapper}
+      className="w-full h-full relative"
+      onKeyDown={onKeyDown}
+      tabIndex={0}
+    >
+      <EquipmentToolbar />
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -149,11 +203,13 @@ export function FlowCanvas() {
         edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.3 }}
-        // MVP: Lock topology - no connecting new edges
-        // Set nodesConnectable={true} to enable edge creation with port type validation
+        // Enable edge creation with port type validation
         edgesReconnectable={false}
         edgesFocusable={false}
-        nodesConnectable={false}
+        nodesConnectable={true}
+        // Enable drag-and-drop
+        onDragOver={onDragOver}
+        onDrop={onDrop}
         // Allow node dragging and selection
         nodesDraggable={true}
         elementsSelectable={true}
@@ -180,32 +236,16 @@ export function FlowCanvas() {
           showInteractive={false}
           position="bottom-right"
         />
-        <MiniMap
-          nodeColor={(node) => {
-            switch (node.type) {
-              case "feed":
-                return "#0891b2"; // cyan
-              case "pump":
-                return "#06b6d4"; // cyan-500
-              case "polymer":
-                return "#7c3aed"; // violet
-              case "dewatering":
-                return "#ea580c"; // orange
-              case "clarifier":
-                return "#3b82f6"; // blue-500
-              case "thickener":
-                return "#10b981"; // emerald-500
-              default:
-                return "#64748b"; // slate
-            }
-          }}
-          nodeStrokeWidth={3}
-          pannable
-          zoomable
-          position="bottom-left"
-          style={{ marginLeft: 10, marginBottom: 10 }}
-        />
       </ReactFlow>
     </div>
+  );
+}
+
+// Export wrapped component with ReactFlowProvider
+export function FlowCanvas() {
+  return (
+    <ReactFlowProvider>
+      <FlowCanvasInner />
+    </ReactFlowProvider>
   );
 }
