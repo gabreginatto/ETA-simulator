@@ -35,6 +35,7 @@ from app.engine.kpis import compute_kpis, generate_kpi_warnings
 def solve_plant(
     plant_definition: Dict[str, Any],
     jar_test_optimum_ppm: Optional[float] = None,
+    jar_test_range: Optional[Dict[str, float]] = None,
 ) -> Dict[str, Any]:
     """
     Run a complete dewatering simulation based on plant definition.
@@ -46,6 +47,7 @@ def solve_plant(
             - dewatering_unit.parameters: max_flow_m3_h, capture_rate, cake_dryness_percent
             - settings: polymer_price_per_kg, operating_hours_per_day
         jar_test_optimum_ppm: Optional override for jar test dose.
+        jar_test_range: Optional dict with acceptable_range_min_ppm and acceptable_range_max_ppm.
 
     Returns:
         SimulationResult dictionary with:
@@ -130,6 +132,19 @@ def solve_plant(
                 f"Very high effective dose ({effective_ppm:.1f} ppm) - verify jar test results"
             )
 
+        # Check dose against jar test acceptable range
+        if jar_test_range:
+            range_min = jar_test_range.get("acceptable_range_min_ppm")
+            range_max = jar_test_range.get("acceptable_range_max_ppm")
+            if range_min is not None and effective_ppm < range_min:
+                result["warnings"].append(
+                    f"Effective dose ({effective_ppm:.1f} ppm) is below jar test acceptable range (min: {range_min:.1f} ppm)"
+                )
+            if range_max is not None and effective_ppm > range_max:
+                result["warnings"].append(
+                    f"Effective dose ({effective_ppm:.1f} ppm) exceeds jar test acceptable range (max: {range_max:.1f} ppm)"
+                )
+
         # ---------------------------------------------------------------------
         # Build feed stream
         # ---------------------------------------------------------------------
@@ -203,7 +218,19 @@ def solve_plant(
     return result
 
 
-def validate_plant_definition(plant_definition: Dict[str, Any]) -> List[str]:
+class ValidationError:
+    """Structured validation error with path and message."""
+
+    def __init__(self, path: str, message: str, severity: str = "error"):
+        self.path = path
+        self.message = message
+        self.severity = severity  # "error" or "warning"
+
+    def to_dict(self) -> Dict[str, str]:
+        return {"path": self.path, "message": self.message, "severity": self.severity}
+
+
+def validate_plant_definition(plant_definition: Dict[str, Any]) -> List[Dict[str, str]]:
     """
     Validate plant definition structure without running simulation.
 
@@ -211,39 +238,93 @@ def validate_plant_definition(plant_definition: Dict[str, Any]) -> List[str]:
         plant_definition: Plant configuration dictionary.
 
     Returns:
-        List of validation error messages (empty if valid).
+        List of validation error dictionaries with path, message, and severity.
     """
-    errors = []
+    errors: List[ValidationError] = []
 
     required_sections = ["feed_source", "polymer_conditioner", "dewatering_unit"]
     for section in required_sections:
         if section not in plant_definition:
-            errors.append(f"Missing required section: {section}")
+            errors.append(ValidationError(section, f"Missing required section: {section}"))
             continue
         if "parameters" not in plant_definition[section]:
-            errors.append(f"Missing 'parameters' in {section}")
+            errors.append(ValidationError(f"{section}.parameters", f"Missing parameters in {section}"))
 
-    if "feed_source" in plant_definition and "parameters" in plant_definition["feed_source"]:
+    # Feed source validation
+    if "feed_source" in plant_definition and "parameters" in plant_definition.get("feed_source", {}):
         params = plant_definition["feed_source"]["parameters"]
-        if "flow_m3_h" not in params:
-            errors.append("feed_source.parameters.flow_m3_h is required")
-        if "ts_percent" not in params:
-            errors.append("feed_source.parameters.ts_percent is required")
+        flow = params.get("flow_m3_h")
+        ts = params.get("ts_percent")
 
-    if "polymer_conditioner" in plant_definition and "parameters" in plant_definition["polymer_conditioner"]:
+        if flow is None:
+            errors.append(ValidationError("feed_source.parameters.flow_m3_h", "Flow rate is required"))
+        elif flow <= 0:
+            errors.append(ValidationError("feed_source.parameters.flow_m3_h", "Flow rate must be greater than 0"))
+        elif flow > 10000:
+            errors.append(ValidationError("feed_source.parameters.flow_m3_h", "Flow rate exceeds maximum (10,000 m³/h)", "warning"))
+
+        if ts is None:
+            errors.append(ValidationError("feed_source.parameters.ts_percent", "Total solids is required"))
+        elif ts < 0 or ts > 100:
+            errors.append(ValidationError("feed_source.parameters.ts_percent", "Total solids must be between 0 and 100%"))
+        elif ts < 0.5:
+            errors.append(ValidationError("feed_source.parameters.ts_percent", "Very low solids content (<0.5%)", "warning"))
+        elif ts > 15:
+            errors.append(ValidationError("feed_source.parameters.ts_percent", "Very high solids content (>15%)", "warning"))
+
+    # Polymer conditioner validation
+    if "polymer_conditioner" in plant_definition and "parameters" in plant_definition.get("polymer_conditioner", {}):
         params = plant_definition["polymer_conditioner"]["parameters"]
-        if "jar_test_optimum_ppm" not in params:
-            errors.append("polymer_conditioner.parameters.jar_test_optimum_ppm is required")
-        if "shear_factor" not in params:
-            errors.append("polymer_conditioner.parameters.shear_factor is required")
-        if "safety_factor" not in params:
-            errors.append("polymer_conditioner.parameters.safety_factor is required")
+        jar_dose = params.get("jar_test_optimum_ppm")
+        shear = params.get("shear_factor")
+        safety = params.get("safety_factor")
 
-    if "dewatering_unit" in plant_definition and "parameters" in plant_definition["dewatering_unit"]:
+        if jar_dose is None:
+            errors.append(ValidationError("polymer_conditioner.parameters.jar_test_optimum_ppm", "Jar test optimum dose is required"))
+        elif jar_dose <= 0:
+            errors.append(ValidationError("polymer_conditioner.parameters.jar_test_optimum_ppm", "Dose must be greater than 0"))
+        elif jar_dose > 100:
+            errors.append(ValidationError("polymer_conditioner.parameters.jar_test_optimum_ppm", "Unusually high dose (>100 ppm)", "warning"))
+
+        if shear is None:
+            errors.append(ValidationError("polymer_conditioner.parameters.shear_factor", "Shear factor is required"))
+        elif shear < 0.5 or shear > 3.0:
+            errors.append(ValidationError("polymer_conditioner.parameters.shear_factor", "Shear factor should be between 0.5 and 3.0"))
+
+        if safety is None:
+            errors.append(ValidationError("polymer_conditioner.parameters.safety_factor", "Safety factor is required"))
+        elif safety < 1.0:
+            errors.append(ValidationError("polymer_conditioner.parameters.safety_factor", "Safety factor should be at least 1.0"))
+        elif safety > 2.0:
+            errors.append(ValidationError("polymer_conditioner.parameters.safety_factor", "Safety factor >2.0 may waste polymer", "warning"))
+
+    # Dewatering unit validation
+    if "dewatering_unit" in plant_definition and "parameters" in plant_definition.get("dewatering_unit", {}):
         params = plant_definition["dewatering_unit"]["parameters"]
-        if "capture_rate" not in params:
-            errors.append("dewatering_unit.parameters.capture_rate is required")
-        if "cake_dryness_percent" not in params:
-            errors.append("dewatering_unit.parameters.cake_dryness_percent is required")
+        capture = params.get("capture_rate")
+        cake_ds = params.get("cake_dryness_percent")
+        max_flow = params.get("max_flow_m3_h")
 
-    return errors
+        if capture is None:
+            errors.append(ValidationError("dewatering_unit.parameters.capture_rate", "Capture rate is required"))
+        elif capture < 0 or capture > 1:
+            errors.append(ValidationError("dewatering_unit.parameters.capture_rate", "Capture rate must be between 0 and 1"))
+        elif capture < 0.8:
+            errors.append(ValidationError("dewatering_unit.parameters.capture_rate", "Low capture rate (<80%)", "warning"))
+
+        if cake_ds is None:
+            errors.append(ValidationError("dewatering_unit.parameters.cake_dryness_percent", "Cake dryness is required"))
+        elif cake_ds < 10 or cake_ds > 50:
+            errors.append(ValidationError("dewatering_unit.parameters.cake_dryness_percent", "Cake dryness should be between 10% and 50%"))
+
+        # Check flow vs capacity
+        if max_flow is not None and "feed_source" in plant_definition:
+            feed_flow = plant_definition["feed_source"].get("parameters", {}).get("flow_m3_h", 0)
+            if feed_flow > max_flow:
+                errors.append(ValidationError(
+                    "dewatering_unit.parameters.max_flow_m3_h",
+                    f"Feed flow ({feed_flow} m³/h) exceeds unit capacity ({max_flow} m³/h)",
+                    "warning"
+                ))
+
+    return [e.to_dict() for e in errors]

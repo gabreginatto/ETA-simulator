@@ -17,6 +17,10 @@ import type {
   PolymerConditionerParams,
   DewateringUnitParams,
 } from "../types";
+import type { ValidationError } from "../api/client";
+
+// Re-export ValidationError type for convenience
+export type { ValidationError };
 
 // Default plant configuration
 const DEFAULT_PLANT_CONFIG: PlantConfiguration = {
@@ -39,11 +43,13 @@ const DEFAULT_PLANT_CONFIG: PlantConfiguration = {
       max_flow_m3_h: 150.0,
       capture_rate: 0.95,
       cake_dryness_percent: 23.0,
+      polymer_split_cake: 0.3,
     },
   },
   settings: {
     polymer_price_per_kg: 5.0,
     operating_hours_per_day: 24.0,
+    currency: "USD",
   },
 };
 
@@ -117,6 +123,11 @@ interface PlantState {
   simulationResult: SimulationResult | null;
   isSimulating: boolean;
 
+  // Validation state
+  validationErrors: ValidationError[];
+  validationWarnings: ValidationError[];
+  isValidating: boolean;
+
   // Jar tests
   jarTests: JarTest[];
   selectedJarTestId: string | null;
@@ -141,6 +152,10 @@ interface PlantState {
   setJarTests: (tests: JarTest[]) => void;
   selectJarTest: (id: string | null) => void;
   updateStreamData: (result: SimulationResult) => void;
+  setValidationErrors: (errors: ValidationError[]) => void;
+  setValidationWarnings: (warnings: ValidationError[]) => void;
+  setIsValidating: (value: boolean) => void;
+  clearValidation: () => void;
 }
 
 export const useStore = create<PlantState>()(
@@ -153,6 +168,9 @@ export const useStore = create<PlantState>()(
     currentProject: null,
     simulationResult: null,
     isSimulating: false,
+    validationErrors: [],
+    validationWarnings: [],
+    isValidating: false,
     jarTests: [],
     selectedJarTestId: null,
 
@@ -271,6 +289,15 @@ export const useStore = create<PlantState>()(
       set((state) => {
         state.simulationResult = result;
         if (result) {
+          // Parse warnings to detect node-specific issues
+          const warnings = result.warnings || [];
+          const hasDoseOutOfRange = warnings.some(
+            (w) =>
+              w.toLowerCase().includes("jar test acceptable range") ||
+              w.toLowerCase().includes("very low effective dose") ||
+              w.toLowerCase().includes("very high effective dose")
+          );
+
           // Update stream data on nodes
           state.nodes.forEach((node: Node<EquipmentNodeData>) => {
             if (node.data.type === "feed") {
@@ -278,6 +305,7 @@ export const useStore = create<PlantState>()(
             } else if (node.data.type === "polymer") {
               (node.data as PolymerNodeData).streamData = result.streams.conditioned;
               (node.data as PolymerNodeData).effectiveDose = result.kpis.polymer_dose_ppm;
+              (node.data as PolymerNodeData).isDoseOutOfRange = hasDoseOutOfRange;
             } else if (node.data.type === "dewatering") {
               const dewateringData = node.data as DewateringNodeData;
               dewateringData.cakeStreamData = result.streams.cake;
@@ -310,7 +338,7 @@ export const useStore = create<PlantState>()(
       set((state) => {
         state.currentProject = project;
         state.plantConfiguration = project.plant_configuration;
-        state.selectedJarTestId = project.linked_jar_test_id || null;
+        state.selectedJarTestId = project.jar_test_id || null;
         state.simulationResult = null;
 
         // Update nodes with project configuration
@@ -393,6 +421,28 @@ export const useStore = create<PlantState>()(
           }
         });
       }),
+
+    // Validation actions
+    setValidationErrors: (errors) =>
+      set((state) => {
+        state.validationErrors = errors;
+      }),
+
+    setValidationWarnings: (warnings) =>
+      set((state) => {
+        state.validationWarnings = warnings;
+      }),
+
+    setIsValidating: (value) =>
+      set((state) => {
+        state.isValidating = value;
+      }),
+
+    clearValidation: () =>
+      set((state) => {
+        state.validationErrors = [];
+        state.validationWarnings = [];
+      }),
   }))
 );
 
@@ -404,8 +454,30 @@ export const usePlantConfiguration = () => useStore((state) => state.plantConfig
 export const useSimulationResult = () => useStore((state) => state.simulationResult);
 export const useIsSimulating = () => useStore((state) => state.isSimulating);
 export const useCurrentProject = () => useStore((state) => state.currentProject);
-export const useJarTests = () => useStore((state) => state.jarTests);
+export const useJarTestsState = () => useStore((state) => state.jarTests);
 export const useSelectedJarTestId = () => useStore((state) => state.selectedJarTestId);
+
+// Validation selectors
+export const useValidationErrors = () => useStore((state) => state.validationErrors);
+export const useValidationWarnings = () => useStore((state) => state.validationWarnings);
+export const useIsValidating = () => useStore((state) => state.isValidating);
+export const useIsValid = () => useStore((state) => state.validationErrors.length === 0);
+
+// Get errors for a specific path
+export const useErrorsForPath = (path: string) =>
+  useStore((state) =>
+    state.validationErrors.filter(
+      (e) => e.path === path || e.path.startsWith(path + ".")
+    )
+  );
+
+// Get warnings for a specific path
+export const useWarningsForPath = (path: string) =>
+  useStore((state) =>
+    state.validationWarnings.filter(
+      (w) => w.path === path || w.path.startsWith(path + ".")
+    )
+  );
 
 // Get the selected node data
 export const useSelectedNode = () =>

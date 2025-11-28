@@ -120,6 +120,7 @@ class Project(BaseModel):
                     "settings": {
                         "polymer_price_per_kg": 5.0,
                         "operating_hours_per_day": 24.0,
+                        "currency": "USD",
                     },
                 },
                 "jar_test_id": "JT-2024-001",
@@ -174,5 +175,6 @@ def get_default_plant_configuration() -> PlantConfiguration:
         settings={
             "polymer_price_per_kg": None,
             "operating_hours_per_day": 24.0,
+            "currency": "USD",
         },
     )

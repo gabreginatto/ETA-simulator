@@ -1,12 +1,16 @@
 """
 POST /simulate endpoint for running simulations.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import SimulateRequest, SimulationResponse
 from app.engine.solver import solve_plant
-from app.api.routes.jar_tests import jar_tests_db
+from app.db.database import get_db
+from app.db.models import JarTestModel
 
 router = APIRouter()
 
@@ -33,7 +37,10 @@ Optionally link a jar test to automatically use its optimum polymer dose.
         422: {"description": "Validation error in parameters"},
     },
 )
-async def simulate(request: SimulateRequest) -> Dict[str, Any]:
+async def simulate(
+    request: SimulateRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """
     Run a dewatering simulation.
 
@@ -44,10 +51,15 @@ async def simulate(request: SimulateRequest) -> Dict[str, Any]:
         SimulationResponse with streams, KPIs, warnings, and errors
     """
     jar_test_optimum_ppm = request.jar_test_optimum_ppm
+    jar_test_range = None
 
-    # If jar_test_id provided, fetch the jar test and use its optimum dose
+    # If jar_test_id provided, fetch the jar test and use its optimum dose and range
     if request.jar_test_id:
-        jar_test = jar_tests_db.get(request.jar_test_id)
+        result = await db.execute(
+            select(JarTestModel).where(JarTestModel.id == request.jar_test_id)
+        )
+        jar_test = result.scalar_one_or_none()
+
         if not jar_test:
             raise HTTPException(
                 status_code=404,
@@ -55,13 +67,19 @@ async def simulate(request: SimulateRequest) -> Dict[str, Any]:
             )
         # Use jar test optimum unless explicitly overridden
         if jar_test_optimum_ppm is None:
-            jar_test_optimum_ppm = jar_test.analysis.optimum_dose_ppm
+            jar_test_optimum_ppm = jar_test.analysis.get("optimum_dose_ppm")
+        # Extract acceptable range for validation
+        jar_test_range = {
+            "acceptable_range_min_ppm": jar_test.analysis.get("acceptable_range_min_ppm"),
+            "acceptable_range_max_ppm": jar_test.analysis.get("acceptable_range_max_ppm"),
+        }
 
     # Run the simulation
     try:
         result = solve_plant(
             plant_definition=request.plant_definition,
             jar_test_optimum_ppm=jar_test_optimum_ppm,
+            jar_test_range=jar_test_range,
         )
     except Exception as e:
         raise HTTPException(
@@ -88,13 +106,18 @@ async def validate_configuration(request: SimulateRequest) -> Dict[str, Any]:
     """
     Validate plant configuration without running simulation.
 
-    Returns validation errors and warnings.
+    Returns validation errors and warnings with paths for inline display.
     """
     from app.engine.solver import validate_plant_definition
 
-    errors = validate_plant_definition(request.plant_definition)
+    validation_results = validate_plant_definition(request.plant_definition)
+
+    # Separate errors and warnings
+    errors = [e for e in validation_results if e.get("severity") == "error"]
+    warnings = [e for e in validation_results if e.get("severity") == "warning"]
 
     return {
         "valid": len(errors) == 0,
         "errors": errors,
+        "warnings": warnings,
     }

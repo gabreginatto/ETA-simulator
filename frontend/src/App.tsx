@@ -1,7 +1,7 @@
 /**
  * Main App component - SludgeSim application layout.
  */
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactFlowProvider } from "@xyflow/react";
 import { Droplets, Save, FolderOpen, Settings, RotateCcw, Keyboard, HelpCircle } from "lucide-react";
@@ -12,17 +12,17 @@ import { ResultsPanel } from "./components/panels/ResultsPanel";
 import { SimulateButton } from "./components/SimulateButton";
 import { ToastContainer } from "./components/ui/Toast";
 import { KeyboardShortcutsModal } from "./components/ui/KeyboardShortcutsModal";
+import { ValidationBanner } from "./components/ui/ValidationBanner";
+import { SaveProjectModal } from "./components/modals/SaveProjectModal";
+import { LoadProjectModal } from "./components/modals/LoadProjectModal";
+import { SettingsModal } from "./components/modals/SettingsModal";
 import { useStore } from "./store/useStore";
 import { useJarTests } from "./hooks/useJarTests";
 import { useToast } from "./hooks/useToast";
+import { useValidation } from "./hooks/useValidation";
 
-// Toast context for global access
-const ToastContext = createContext<ReturnType<typeof useToast> | null>(null);
-export const useToastContext = () => {
-  const context = useContext(ToastContext);
-  if (!context) throw new Error("useToastContext must be used within ToastProvider");
-  return context;
-};
+// Draft persistence key
+const DRAFT_STORAGE_KEY = "sludgesim-draft";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -36,19 +36,63 @@ const queryClient = new QueryClient({
 
 function AppContent() {
   const currentProject = useStore((state) => state.currentProject);
+  const plantConfiguration = useStore((state) => state.plantConfiguration);
+  const setPlantConfiguration = useStore((state) => state.setPlantConfiguration);
   const resetToDefault = useStore((state) => state.resetToDefault);
   const initializeDefaultPlant = useStore((state) => state.initializeDefaultPlant);
   const selectNode = useStore((state) => state.selectNode);
   const toast = useToast();
+
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Fetch jar tests on mount
   const { isLoading: jarTestsLoading } = useJarTests();
 
-  // Initialize default plant on mount
+  // Run validation on config changes
+  useValidation();
+
+  // Load draft from localStorage on mount
   useEffect(() => {
-    initializeDefaultPlant();
-  }, [initializeDefaultPlant]);
+    const draft = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (draft && !currentProject) {
+      try {
+        const parsed = JSON.parse(draft);
+        setPlantConfiguration(parsed);
+        console.log("Loaded draft configuration from localStorage");
+      } catch (e) {
+        console.warn("Failed to parse draft:", e);
+      }
+    } else {
+      initializeDefaultPlant();
+    }
+  }, []);
+
+  // Save draft to localStorage when configuration changes (and no project loaded)
+  useEffect(() => {
+    if (!currentProject) {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(plantConfiguration));
+    }
+  }, [plantConfiguration, currentProject]);
+
+  // Clear draft when a project is loaded
+  useEffect(() => {
+    if (currentProject) {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    }
+  }, [currentProject]);
+
+  // Memoized handlers
+  const handleOpenSave = useCallback(() => setShowSaveModal(true), []);
+  const handleOpenLoad = useCallback(() => setShowLoadModal(true), []);
+  const handleCloseSave = useCallback(() => setShowSaveModal(false), []);
+  const handleCloseLoad = useCallback(() => setShowLoadModal(false), []);
+  const handleShowShortcuts = useCallback(() => setShowShortcuts(true), []);
+  const handleHideShortcuts = useCallback(() => setShowShortcuts(false), []);
+  const handleOpenSettings = useCallback(() => setShowSettings(true), []);
+  const handleCloseSettings = useCallback(() => setShowSettings(false), []);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -56,6 +100,18 @@ function AppContent() {
       // Don't trigger shortcuts when typing in inputs
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
+      }
+
+      // Ctrl/Cmd + S - Save
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        setShowSaveModal(true);
+      }
+
+      // Ctrl/Cmd + O - Open/Load
+      if ((e.ctrlKey || e.metaKey) && e.key === "o") {
+        e.preventDefault();
+        setShowLoadModal(true);
       }
 
       // ? - Show keyboard shortcuts
@@ -68,6 +124,12 @@ function AppContent() {
       if (e.key === "Escape") {
         if (showShortcuts) {
           setShowShortcuts(false);
+        } else if (showSaveModal) {
+          setShowSaveModal(false);
+        } else if (showLoadModal) {
+          setShowLoadModal(false);
+        } else if (showSettings) {
+          setShowSettings(false);
         } else {
           selectNode(null);
         }
@@ -76,11 +138,20 @@ function AppContent() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showShortcuts, selectNode]);
+  }, [showShortcuts, showSaveModal, showLoadModal, showSettings, selectNode]);
 
   const handleReset = () => {
     resetToDefault();
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
     toast.info("Reset", "Plant configuration reset to defaults");
+  };
+
+  const handleSaved = () => {
+    toast.success("Saved", "Project saved successfully");
+  };
+
+  const handleLoaded = () => {
+    toast.success("Loaded", "Project loaded successfully");
   };
 
   return (
@@ -111,27 +182,30 @@ function AppContent() {
             Reset
           </button>
           <button
+            onClick={handleOpenSave}
             className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-            title="Save project"
+            title="Save project (Ctrl+S)"
           >
             <Save className="w-4 h-4" />
             Save
           </button>
           <button
+            onClick={handleOpenLoad}
             className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-            title="Load project"
+            title="Load project (Ctrl+O)"
           >
             <FolderOpen className="w-4 h-4" />
             Load
           </button>
           <button
-            onClick={() => setShowShortcuts(true)}
+            onClick={handleShowShortcuts}
             className="p-2 text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
             title="Keyboard shortcuts (?)"
           >
             <HelpCircle className="w-5 h-5" />
           </button>
           <button
+            onClick={handleOpenSettings}
             className="p-2 text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
             title="Settings"
           >
@@ -144,6 +218,11 @@ function AppContent() {
       <div className="flex-1 flex overflow-hidden">
         {/* Canvas Area */}
         <div className="flex-1 flex flex-col">
+          {/* Validation Banner */}
+          <div className="px-4 pt-2">
+            <ValidationBanner />
+          </div>
+
           {/* Canvas */}
           <div className="flex-1 relative">
             <ReactFlowProvider>
@@ -180,10 +259,24 @@ function AppContent() {
       {/* Toast notifications */}
       <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
 
-      {/* Keyboard shortcuts modal */}
+      {/* Modals */}
       <KeyboardShortcutsModal
         isOpen={showShortcuts}
-        onClose={() => setShowShortcuts(false)}
+        onClose={handleHideShortcuts}
+      />
+      <SaveProjectModal
+        isOpen={showSaveModal}
+        onClose={handleCloseSave}
+        onSaved={handleSaved}
+      />
+      <LoadProjectModal
+        isOpen={showLoadModal}
+        onClose={handleCloseLoad}
+        onLoaded={handleLoaded}
+      />
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={handleCloseSettings}
       />
     </div>
   );

@@ -366,3 +366,116 @@ class TestSolver:
         assert result["success"] is True
         assert len(result["warnings"]) > 0
         assert any("exceeds" in w.lower() for w in result["warnings"])
+
+    def test_solve_plant_jar_test_range_below_min(self):
+        """Test warning when effective dose is below jar test range."""
+        plant_definition = {
+            "feed_source": {
+                "parameters": {"flow_m3_h": 100.0, "ts_percent": 3.0}
+            },
+            "polymer_conditioner": {
+                "parameters": {
+                    "jar_test_optimum_ppm": 5.0,  # Very low dose
+                    "shear_factor": 1.0,
+                    "safety_factor": 1.0,
+                }
+            },
+            "dewatering_unit": {
+                "parameters": {"capture_rate": 0.95, "cake_dryness_percent": 23.0}
+            },
+            "settings": {},
+        }
+
+        jar_test_range = {
+            "acceptable_range_min_ppm": 10.0,
+            "acceptable_range_max_ppm": 25.0,
+        }
+
+        result = solve_plant(plant_definition, jar_test_range=jar_test_range)
+
+        assert result["success"] is True
+        assert any("below jar test acceptable range" in w.lower() for w in result["warnings"])
+
+    def test_solve_plant_jar_test_range_above_max(self):
+        """Test warning when effective dose exceeds jar test range."""
+        plant_definition = {
+            "feed_source": {
+                "parameters": {"flow_m3_h": 100.0, "ts_percent": 3.0}
+            },
+            "polymer_conditioner": {
+                "parameters": {
+                    "jar_test_optimum_ppm": 25.0,  # High dose
+                    "shear_factor": 1.5,  # Will result in 37.5 ppm
+                    "safety_factor": 1.0,
+                }
+            },
+            "dewatering_unit": {
+                "parameters": {"capture_rate": 0.95, "cake_dryness_percent": 23.0}
+            },
+            "settings": {},
+        }
+
+        jar_test_range = {
+            "acceptable_range_min_ppm": 10.0,
+            "acceptable_range_max_ppm": 30.0,  # 37.5 exceeds this
+        }
+
+        result = solve_plant(plant_definition, jar_test_range=jar_test_range)
+
+        assert result["success"] is True
+        assert any("exceeds jar test acceptable range" in w.lower() for w in result["warnings"])
+
+    def test_solve_plant_jar_test_range_within_range(self):
+        """Test no range warning when dose is within acceptable range."""
+        plant_definition = {
+            "feed_source": {
+                "parameters": {"flow_m3_h": 100.0, "ts_percent": 3.0}
+            },
+            "polymer_conditioner": {
+                "parameters": {
+                    "jar_test_optimum_ppm": 15.0,
+                    "shear_factor": 1.2,
+                    "safety_factor": 1.1,
+                }  # Effective = 19.8 ppm
+            },
+            "dewatering_unit": {
+                "parameters": {"capture_rate": 0.95, "cake_dryness_percent": 23.0}
+            },
+            "settings": {},
+        }
+
+        jar_test_range = {
+            "acceptable_range_min_ppm": 10.0,
+            "acceptable_range_max_ppm": 25.0,  # 19.8 is within range
+        }
+
+        result = solve_plant(plant_definition, jar_test_range=jar_test_range)
+
+        assert result["success"] is True
+        # Should not have range-related warnings
+        assert not any("jar test acceptable range" in w.lower() for w in result["warnings"])
+
+    def test_solve_plant_mass_balance_closes(self):
+        """Test that mass balance closes at approximately 100%."""
+        plant_definition = {
+            "feed_source": {
+                "parameters": {"flow_m3_h": 100.0, "ts_percent": 3.0}
+            },
+            "polymer_conditioner": {
+                "parameters": {
+                    "jar_test_optimum_ppm": 15.0,
+                    "shear_factor": 1.2,
+                    "safety_factor": 1.1,
+                }
+            },
+            "dewatering_unit": {
+                "parameters": {"capture_rate": 0.95, "cake_dryness_percent": 23.0}
+            },
+            "settings": {},
+        }
+
+        result = solve_plant(plant_definition)
+
+        assert result["success"] is True
+        # Mass balance should be very close to 100%
+        assert result["kpis"]["mass_balance_closure_percent"] == pytest.approx(100.0, rel=0.01)

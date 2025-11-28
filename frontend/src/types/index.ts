@@ -35,11 +35,13 @@ export interface DewateringUnitParams {
   max_flow_m3_h?: number;
   capture_rate: number;
   cake_dryness_percent: number;
+  polymer_split_cake?: number;
 }
 
 export interface PlantSettings {
   polymer_price_per_kg?: number;
   operating_hours_per_day?: number;
+  currency?: string;
 }
 
 // Plant configuration structure
@@ -142,7 +144,7 @@ export interface Project {
   name: string;
   description?: string;
   plant_configuration: PlantConfiguration;
-  linked_jar_test_id?: string;
+  jar_test_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -167,6 +169,7 @@ export interface PolymerNodeData extends BaseNodeData {
   parameters: PolymerConditionerParams;
   streamData?: StreamData;
   effectiveDose?: number;
+  isDoseOutOfRange?: boolean;
 }
 
 export interface DewateringNodeData extends BaseNodeData {
@@ -182,7 +185,83 @@ export type EquipmentNodeData =
   | PolymerNodeData
   | DewateringNodeData;
 
+// ============================================
+// Graph types for connection validation
+// ============================================
+
+export type PortType = "sludge" | "cake" | "liquid" | "polymer";
+export type PortDirection = "input" | "output";
+
+export interface Port {
+  id: string;
+  portType: PortType;
+  direction: PortDirection;
+  label?: string;
+}
+
+export interface EquipmentPorts {
+  inputs: Port[];
+  outputs: Port[];
+}
+
+// Standard port definitions for equipment types
+export const EQUIPMENT_PORTS: Record<EquipmentType, EquipmentPorts> = {
+  feed: {
+    inputs: [],
+    outputs: [{ id: "output", portType: "sludge", direction: "output", label: "Sludge Out" }],
+  },
+  polymer: {
+    inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Sludge In" }],
+    outputs: [{ id: "output", portType: "sludge", direction: "output", label: "Conditioned Out" }],
+  },
+  dewatering: {
+    inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Sludge In" }],
+    outputs: [
+      { id: "cake", portType: "cake", direction: "output", label: "Cake Out" },
+      { id: "liquid", portType: "liquid", direction: "output", label: "Centrate Out" },
+    ],
+  },
+};
+
+// Port compatibility: source port type -> compatible target port types
+export const PORT_COMPATIBILITY: Record<PortType, PortType[]> = {
+  sludge: ["sludge"],
+  cake: [],
+  liquid: ["sludge"], // Liquid can recycle to sludge input
+  polymer: [],
+};
+
+/**
+ * Check if a connection between two port types is valid.
+ */
+export function isConnectionValid(
+  sourcePortType: PortType,
+  targetPortType: PortType
+): boolean {
+  const compatible = PORT_COMPATIBILITY[sourcePortType] || [];
+  return compatible.includes(targetPortType);
+}
+
+/**
+ * Get port type for a given equipment and handle.
+ */
+export function getPortType(
+  equipmentType: EquipmentType,
+  handleId: string,
+  direction: PortDirection
+): PortType | null {
+  const ports = EQUIPMENT_PORTS[equipmentType];
+  if (!ports) return null;
+
+  const portList = direction === "input" ? ports.inputs : ports.outputs;
+  const port = portList.find((p) => p.id === handleId);
+  return port?.portType || null;
+}
+
+// ============================================
 // API request/response types
+// ============================================
+
 export interface SimulateRequest {
   plant_definition: PlantConfiguration;
   jar_test_id?: string;
@@ -198,14 +277,14 @@ export interface CreateProjectRequest {
   name: string;
   description?: string;
   plant_configuration: PlantConfiguration;
-  linked_jar_test_id?: string;
+  jar_test_id?: string;
 }
 
 export interface UpdateProjectRequest {
   name?: string;
   description?: string;
   plant_configuration?: PlantConfiguration;
-  linked_jar_test_id?: string;
+  jar_test_id?: string;
 }
 
 export interface CreateJarTestRequest {

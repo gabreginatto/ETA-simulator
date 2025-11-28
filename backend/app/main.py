@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.routes import simulate, projects, jar_tests
-from app.db import seed_data
+from app.db.database import init_db, close_db, AsyncSessionLocal
+from app.db.seed_data import seed_database, get_default_plant_definition
 
 
 @asynccontextmanager
@@ -16,21 +17,20 @@ async def lifespan(app: FastAPI):
     # Startup
     print("Starting SludgeSim API...")
 
-    # Load seed data into route databases
-    from app.api.routes.jar_tests import jar_tests_db as route_jar_tests_db
-    from app.api.routes.projects import projects_db as route_projects_db
+    # Initialize database tables
+    await init_db()
+    print("Database tables initialized")
 
-    # Copy seed data to route databases
-    route_jar_tests_db.update(seed_data.jar_tests_db)
-    route_projects_db.update(seed_data.projects_db)
-
-    print(f"Loaded {len(route_jar_tests_db)} jar tests")
-    print(f"Loaded {len(route_projects_db)} projects")
+    # Seed database with initial data
+    async with AsyncSessionLocal() as session:
+        await seed_database(session)
+        print("Seed data loaded")
 
     yield
 
     # Shutdown
     print("Shutting down SludgeSim API...")
+    await close_db()
 
 
 app = FastAPI(
@@ -50,7 +50,7 @@ SludgeSim provides simulation and optimization tools for wastewater sludge dewat
 2. Configure your plant parameters (feed flow, solids, equipment settings)
 3. Run a simulation to get KPIs and mass balance results
 """,
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -89,7 +89,7 @@ async def root():
     return {
         "message": "Welcome to SludgeSim API",
         "description": "Sludge Dewatering Simulation Platform",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "docs": "/docs",
         "redoc": "/redoc",
         "endpoints": {
@@ -109,4 +109,4 @@ async def health_check():
 @app.get("/api/default-config", tags=["Configuration"])
 async def get_default_config():
     """Get the default plant configuration template."""
-    return seed_data.get_default_plant_definition()
+    return get_default_plant_definition()

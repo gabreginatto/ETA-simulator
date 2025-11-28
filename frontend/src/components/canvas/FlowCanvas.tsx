@@ -10,6 +10,8 @@ import {
   BackgroundVariant,
   type OnNodesChange,
   type OnEdgesChange,
+  type OnConnect,
+  type Connection,
   type NodeTypes,
   type EdgeTypes,
 } from "@xyflow/react";
@@ -20,6 +22,11 @@ import { FeedNode } from "./nodes/FeedNode";
 import { PolymerNode } from "./nodes/PolymerNode";
 import { DewateringNode } from "./nodes/DewateringNode";
 import { StreamEdge } from "./edges/StreamEdge";
+import {
+  getPortType,
+  isConnectionValid,
+  type EquipmentType,
+} from "../../types";
 
 // Register custom node types
 const nodeTypes: NodeTypes = {
@@ -67,6 +74,61 @@ export function FlowCanvas() {
     [onEdgesChange]
   );
 
+  /**
+   * Validates if a connection between two nodes is allowed based on port types.
+   * This is used to prevent invalid edge creation when nodesConnectable is enabled.
+   */
+  const isValidConnectionFn = useCallback(
+    (connection: Connection | { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) => {
+      const { source, target, sourceHandle, targetHandle } = connection;
+
+      if (!source || !target || !sourceHandle || !targetHandle) {
+        return false;
+      }
+
+      // Find source and target node types
+      const sourceNode = nodes.find((n) => n.id === source);
+      const targetNode = nodes.find((n) => n.id === target);
+
+      if (!sourceNode || !targetNode) {
+        return false;
+      }
+
+      const sourceType = sourceNode.type as EquipmentType;
+      const targetType = targetNode.type as EquipmentType;
+
+      // Get port types
+      const sourcePortType = getPortType(sourceType, sourceHandle, "output");
+      const targetPortType = getPortType(targetType, targetHandle, "input");
+
+      if (!sourcePortType || !targetPortType) {
+        return false;
+      }
+
+      // Validate connection compatibility
+      return isConnectionValid(sourcePortType, targetPortType);
+    },
+    [nodes]
+  );
+
+  /**
+   * Handler for when a new connection is made.
+   * Currently disabled (nodesConnectable=false), but prepared for future use.
+   */
+  const handleConnect: OnConnect = useCallback(
+    (connection) => {
+      // Validate first
+      if (!isValidConnectionFn(connection)) {
+        console.warn("Invalid connection rejected:", connection);
+        return;
+      }
+
+      // In the future, this would add the edge to the graph
+      console.log("Connection made (not persisted - nodesConnectable=false):", connection);
+    },
+    [isValidConnectionFn]
+  );
+
   return (
     <div className="w-full h-full">
       <ReactFlow
@@ -75,11 +137,14 @@ export function FlowCanvas() {
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onSelectionChange={handleSelectionChange}
+        onConnect={handleConnect}
+        isValidConnection={isValidConnectionFn}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         // MVP: Lock topology - no connecting new edges
+        // Set nodesConnectable={true} to enable edge creation with port type validation
         edgesReconnectable={false}
         edgesFocusable={false}
         nodesConnectable={false}

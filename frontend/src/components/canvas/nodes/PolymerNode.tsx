@@ -3,12 +3,12 @@
  */
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, AlertTriangle } from "lucide-react";
 import type { PolymerNodeData } from "../../../types";
 
 function PolymerNodeComponent({ data, selected }: NodeProps) {
   const nodeData = data as PolymerNodeData;
-  const { parameters, effectiveDose } = nodeData;
+  const { parameters, effectiveDose, isDoseOutOfRange } = nodeData;
 
   // Calculate effective dose if not provided
   const calculatedEffectiveDose =
@@ -22,7 +22,9 @@ function PolymerNodeComponent({ data, selected }: NodeProps) {
       className={`
         w-44 bg-gradient-to-br from-violet-50 to-purple-100
         rounded-lg shadow-md border-2 transition-all duration-200
-        ${selected ? "border-violet-500 shadow-lg shadow-violet-200" : "border-violet-200"}
+        ${isDoseOutOfRange ? "border-yellow-500 shadow-yellow-200" : ""}
+        ${selected && !isDoseOutOfRange ? "border-violet-500 shadow-lg shadow-violet-200" : ""}
+        ${!selected && !isDoseOutOfRange ? "border-violet-200" : ""}
         hover:shadow-lg hover:border-violet-400
       `}
     >
@@ -38,6 +40,9 @@ function PolymerNodeComponent({ data, selected }: NodeProps) {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-violet-200 bg-violet-500/10 rounded-t-lg">
         <FlaskConical className="w-5 h-5 text-violet-600" />
         <span className="text-sm font-semibold text-violet-800">Polymer</span>
+        {isDoseOutOfRange && (
+          <AlertTriangle className="w-4 h-4 text-yellow-600 ml-auto" />
+        )}
       </div>
 
       {/* Content */}

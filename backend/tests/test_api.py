@@ -1,26 +1,18 @@
 """
 Unit tests for API endpoints.
+Uses httpx async client for testing async FastAPI app.
+Fixtures are provided by conftest.py for transactional isolation.
 """
 import pytest
-from fastapi.testclient import TestClient
-from app.main import app
-from app.db import seed_data
-from app.api.routes.jar_tests import jar_tests_db
-from app.api.routes.projects import projects_db
-
-# Load seed data for tests
-jar_tests_db.update(seed_data.jar_tests_db)
-projects_db.update(seed_data.projects_db)
-
-client = TestClient(app)
 
 
 class TestHealthEndpoint:
     """Test health check endpoint."""
 
-    def test_health_check(self):
+    @pytest.mark.asyncio
+    async def test_health_check(self, client):
         """Test that health endpoint returns healthy status."""
-        response = client.get("/health")
+        response = await client.get("/health")
         assert response.status_code == 200
         assert response.json() == {"status": "healthy"}
 
@@ -28,9 +20,10 @@ class TestHealthEndpoint:
 class TestRootEndpoint:
     """Test root endpoint."""
 
-    def test_root(self):
+    @pytest.mark.asyncio
+    async def test_root(self, client):
         """Test root endpoint returns API info."""
-        response = client.get("/")
+        response = await client.get("/")
         assert response.status_code == 200
         data = response.json()
         assert "message" in data
@@ -41,7 +34,8 @@ class TestRootEndpoint:
 class TestSimulateEndpoint:
     """Test simulation endpoint."""
 
-    def test_simulate_success(self):
+    @pytest.mark.asyncio
+    async def test_simulate_success(self, client):
         """Test successful simulation."""
         plant_definition = {
             "feed_source": {
@@ -68,7 +62,7 @@ class TestSimulateEndpoint:
             "settings": {"polymer_price_per_kg": 5.0},
         }
 
-        response = client.post("/api/simulate", json={"plant_definition": plant_definition})
+        response = await client.post("/api/simulate", json={"plant_definition": plant_definition})
 
         assert response.status_code == 200
         data = response.json()
@@ -77,17 +71,19 @@ class TestSimulateEndpoint:
         assert "cake" in data["streams"]
         assert "polymer_dose_ppm" in data["kpis"]
 
-    def test_simulate_missing_section(self):
+    @pytest.mark.asyncio
+    async def test_simulate_missing_section(self, client):
         """Test simulation with missing section."""
         plant_definition = {
             "feed_source": {"parameters": {"flow_m3_h": 100.0, "ts_percent": 3.0}},
         }
 
-        response = client.post("/api/simulate", json={"plant_definition": plant_definition})
+        response = await client.post("/api/simulate", json={"plant_definition": plant_definition})
 
         assert response.status_code == 422
 
-    def test_simulate_with_jar_test(self):
+    @pytest.mark.asyncio
+    async def test_simulate_with_jar_test(self, client):
         """Test simulation using a jar test ID."""
         plant_definition = {
             "feed_source": {
@@ -106,7 +102,7 @@ class TestSimulateEndpoint:
             "settings": {},
         }
 
-        response = client.post(
+        response = await client.post(
             "/api/simulate",
             json={"plant_definition": plant_definition, "jar_test_id": "JT-2024-001"},
         )
@@ -115,7 +111,8 @@ class TestSimulateEndpoint:
         data = response.json()
         assert data["success"] is True
 
-    def test_simulate_nonexistent_jar_test(self):
+    @pytest.mark.asyncio
+    async def test_simulate_nonexistent_jar_test(self, client):
         """Test simulation with nonexistent jar test ID."""
         plant_definition = {
             "feed_source": {
@@ -134,7 +131,7 @@ class TestSimulateEndpoint:
             "settings": {},
         }
 
-        response = client.post(
+        response = await client.post(
             "/api/simulate",
             json={"plant_definition": plant_definition, "jar_test_id": "nonexistent"},
         )
@@ -145,29 +142,33 @@ class TestSimulateEndpoint:
 class TestJarTestsEndpoint:
     """Test jar tests endpoints."""
 
-    def test_list_jar_tests(self):
+    @pytest.mark.asyncio
+    async def test_list_jar_tests(self, client):
         """Test listing jar tests."""
-        response = client.get("/api/jar-tests")
+        response = await client.get("/api/jar-tests")
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
         assert "total" in data
         assert data["total"] >= 3  # Seed data has 3 jar tests
 
-    def test_get_jar_test(self):
+    @pytest.mark.asyncio
+    async def test_get_jar_test(self, client):
         """Test getting a specific jar test."""
-        response = client.get("/api/jar-tests/JT-2024-001")
+        response = await client.get("/api/jar-tests/JT-2024-001")
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == "JT-2024-001"
         assert data["polymer"]["name"] == "PAM-855"
 
-    def test_get_nonexistent_jar_test(self):
+    @pytest.mark.asyncio
+    async def test_get_nonexistent_jar_test(self, client):
         """Test getting a nonexistent jar test."""
-        response = client.get("/api/jar-tests/nonexistent")
+        response = await client.get("/api/jar-tests/nonexistent")
         assert response.status_code == 404
 
-    def test_create_jar_test(self):
+    @pytest.mark.asyncio
+    async def test_create_jar_test(self, client):
         """Test creating a new jar test."""
         new_test = {
             "date": "2024-04-01",
@@ -180,7 +181,7 @@ class TestJarTestsEndpoint:
             "analysis": {"optimum_dose_ppm": 15.0},
         }
 
-        response = client.post("/api/jar-tests", json=new_test)
+        response = await client.post("/api/jar-tests", json=new_test)
         assert response.status_code == 201
         data = response.json()
         assert "JT-" in data["id"]
@@ -190,28 +191,32 @@ class TestJarTestsEndpoint:
 class TestProjectsEndpoint:
     """Test projects endpoints."""
 
-    def test_list_projects(self):
+    @pytest.mark.asyncio
+    async def test_list_projects(self, client):
         """Test listing projects."""
-        response = client.get("/api/projects")
+        response = await client.get("/api/projects")
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
         assert "total" in data
         assert data["total"] >= 2  # Seed data has 2 projects
 
-    def test_get_project(self):
+    @pytest.mark.asyncio
+    async def test_get_project(self, client):
         """Test getting a specific project."""
-        response = client.get("/api/projects/demo-sabesp-001")
+        response = await client.get("/api/projects/demo-sabesp-001")
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "Sabesp Demo Plant"
 
-    def test_get_nonexistent_project(self):
+    @pytest.mark.asyncio
+    async def test_get_nonexistent_project(self, client):
         """Test getting a nonexistent project."""
-        response = client.get("/api/projects/nonexistent")
+        response = await client.get("/api/projects/nonexistent")
         assert response.status_code == 404
 
-    def test_create_project(self):
+    @pytest.mark.asyncio
+    async def test_create_project(self, client):
         """Test creating a new project."""
         new_project = {
             "name": "Test Project",
@@ -234,13 +239,14 @@ class TestProjectsEndpoint:
             },
         }
 
-        response = client.post("/api/projects", json=new_project)
+        response = await client.post("/api/projects", json=new_project)
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == "Test Project"
         assert "id" in data
 
-    def test_update_project(self):
+    @pytest.mark.asyncio
+    async def test_update_project(self, client):
         """Test updating a project."""
         # First create a project
         new_project = {
@@ -261,11 +267,11 @@ class TestProjectsEndpoint:
             },
         }
 
-        create_response = client.post("/api/projects", json=new_project)
+        create_response = await client.post("/api/projects", json=new_project)
         project_id = create_response.json()["id"]
 
         # Then update it
-        update_response = client.put(
+        update_response = await client.put(
             f"/api/projects/{project_id}",
             json={"name": "Updated Name"},
         )
@@ -273,7 +279,8 @@ class TestProjectsEndpoint:
         assert update_response.status_code == 200
         assert update_response.json()["name"] == "Updated Name"
 
-    def test_delete_project(self):
+    @pytest.mark.asyncio
+    async def test_delete_project(self, client):
         """Test deleting a project."""
         # First create a project
         new_project = {
@@ -294,24 +301,118 @@ class TestProjectsEndpoint:
             },
         }
 
-        create_response = client.post("/api/projects", json=new_project)
+        create_response = await client.post("/api/projects", json=new_project)
         project_id = create_response.json()["id"]
 
         # Then delete it
-        delete_response = client.delete(f"/api/projects/{project_id}")
+        delete_response = await client.delete(f"/api/projects/{project_id}")
         assert delete_response.status_code == 204
 
         # Verify it's gone
-        get_response = client.get(f"/api/projects/{project_id}")
+        get_response = await client.get(f"/api/projects/{project_id}")
         assert get_response.status_code == 404
+
+
+class TestValidateEndpoint:
+    """Test validation endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_validate_valid_config(self, client):
+        """Test validation with valid configuration."""
+        plant_definition = {
+            "feed_source": {
+                "parameters": {"flow_m3_h": 100.0, "ts_percent": 3.0}
+            },
+            "polymer_conditioner": {
+                "parameters": {
+                    "jar_test_optimum_ppm": 15.0,
+                    "shear_factor": 1.2,
+                    "safety_factor": 1.1,
+                }
+            },
+            "dewatering_unit": {
+                "parameters": {"capture_rate": 0.95, "cake_dryness_percent": 23.0}
+            },
+            "settings": {},
+        }
+
+        response = await client.post(
+            "/api/simulate/validate", json={"plant_definition": plant_definition}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["valid"] is True
+        assert len(data["errors"]) == 0
+
+    @pytest.mark.asyncio
+    async def test_validate_invalid_flow(self, client):
+        """Test validation with invalid flow rate."""
+        plant_definition = {
+            "feed_source": {
+                "parameters": {"flow_m3_h": -50.0, "ts_percent": 3.0}
+            },
+            "polymer_conditioner": {
+                "parameters": {
+                    "jar_test_optimum_ppm": 15.0,
+                    "shear_factor": 1.2,
+                    "safety_factor": 1.1,
+                }
+            },
+            "dewatering_unit": {
+                "parameters": {"capture_rate": 0.95, "cake_dryness_percent": 23.0}
+            },
+            "settings": {},
+        }
+
+        response = await client.post(
+            "/api/simulate/validate", json={"plant_definition": plant_definition}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["valid"] is False
+        assert len(data["errors"]) > 0
+        assert any("flow" in e["path"].lower() for e in data["errors"])
+
+    @pytest.mark.asyncio
+    async def test_validate_returns_warnings(self, client):
+        """Test validation returns warnings for edge cases."""
+        plant_definition = {
+            "feed_source": {
+                "parameters": {"flow_m3_h": 15000.0, "ts_percent": 3.0}  # Very high flow
+            },
+            "polymer_conditioner": {
+                "parameters": {
+                    "jar_test_optimum_ppm": 15.0,
+                    "shear_factor": 1.2,
+                    "safety_factor": 1.1,
+                }
+            },
+            "dewatering_unit": {
+                "parameters": {"capture_rate": 0.95, "cake_dryness_percent": 23.0}
+            },
+            "settings": {},
+        }
+
+        response = await client.post(
+            "/api/simulate/validate", json={"plant_definition": plant_definition}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        # High flow should generate warning but still be valid
+        assert data["valid"] is True
+        assert len(data["warnings"]) > 0
 
 
 class TestDefaultConfigEndpoint:
     """Test default configuration endpoint."""
 
-    def test_get_default_config(self):
+    @pytest.mark.asyncio
+    async def test_get_default_config(self, client):
         """Test getting default configuration."""
-        response = client.get("/api/default-config")
+        response = await client.get("/api/default-config")
         assert response.status_code == 200
         data = response.json()
         assert "feed_source" in data

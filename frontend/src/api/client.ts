@@ -91,11 +91,23 @@ export async function simulate(
   }
 }
 
+export interface ValidationError {
+  path: string;
+  message: string;
+  severity: "error" | "warning";
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: ValidationError[];
+  warnings: ValidationError[];
+}
+
 export async function validateConfiguration(
   plantDefinition: PlantConfiguration
-): Promise<{ valid: boolean; errors: string[] }> {
+): Promise<ValidationResult> {
   try {
-    const response = await api.post<{ valid: boolean; errors: string[] }>(
+    const response = await api.post<ValidationResult>(
       "/simulate/validate",
       { plant_definition: plantDefinition }
     );

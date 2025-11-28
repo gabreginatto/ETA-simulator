@@ -10,9 +10,9 @@ interface KeyboardShortcutsModalProps {
 
 const shortcuts = [
   { keys: ["Ctrl", "Enter"], description: "Run simulation" },
-  { keys: ["Ctrl", "S"], description: "Save project (coming soon)" },
-  { keys: ["Ctrl", "O"], description: "Open project (coming soon)" },
-  { keys: ["Esc"], description: "Deselect node / Close panel" },
+  { keys: ["Ctrl", "S"], description: "Save project" },
+  { keys: ["Ctrl", "O"], description: "Load project" },
+  { keys: ["Esc"], description: "Deselect node / Close modal" },
   { keys: ["?"], description: "Show this help" },
 ];
 

@@ -1,10 +1,13 @@
 """
-Project CRUD endpoints.
+Project CRUD endpoints with async database.
 """
 from datetime import datetime
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 import uuid
+
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import (
     ProjectCreate,
@@ -12,13 +15,10 @@ from app.api.schemas import (
     ProjectResponse,
     ProjectListResponse,
 )
-from app.models.project import Project, PlantConfiguration
+from app.db.database import get_db
+from app.db.models import ProjectModel
 
 router = APIRouter()
-
-# In-memory storage for MVP
-# TODO: Replace with database integration
-projects_db: Dict[str, Project] = {}
 
 
 @router.get(
@@ -30,17 +30,24 @@ projects_db: Dict[str, Project] = {}
 async def list_projects(
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(100, ge=1, le=100, description="Max items to return"),
+    db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """List all projects with pagination."""
-    all_projects = list(projects_db.values())
-    # Sort by updated_at descending (most recent first)
-    all_projects.sort(key=lambda p: p.updated_at, reverse=True)
+    # Get total count
+    count_result = await db.execute(select(func.count(ProjectModel.id)))
+    total = count_result.scalar() or 0
 
-    total = len(all_projects)
-    items = all_projects[skip : skip + limit]
+    # Get paginated items, sorted by updated_at descending
+    result = await db.execute(
+        select(ProjectModel)
+        .order_by(ProjectModel.updated_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    projects = result.scalars().all()
 
     return {
-        "items": [p.model_dump() for p in items],
+        "items": [p.to_dict() for p in projects],
         "total": total,
     }
 
@@ -54,15 +61,22 @@ async def list_projects(
         404: {"description": "Project not found"},
     },
 )
-async def get_project(project_id: str) -> Dict[str, Any]:
+async def get_project(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """Get a single project by ID."""
-    project = projects_db.get(project_id)
+    result = await db.execute(
+        select(ProjectModel).where(ProjectModel.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+
     if not project:
         raise HTTPException(
             status_code=404,
             detail=f"Project not found: {project_id}",
         )
-    return project.model_dump()
+    return project.to_dict()
 
 
 @router.post(
@@ -72,24 +86,29 @@ async def get_project(project_id: str) -> Dict[str, Any]:
     summary="Create a new project",
     description="Create a new project with the provided configuration.",
 )
-async def create_project(request: ProjectCreate) -> Dict[str, Any]:
+async def create_project(
+    request: ProjectCreate,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """Create a new project."""
-    # Generate unique ID
     project_id = str(uuid.uuid4())
     now = datetime.utcnow()
 
-    project = Project(
+    project = ProjectModel(
         id=project_id,
         name=request.name,
         description=request.description,
-        plant_configuration=request.plant_configuration,
+        plant_configuration=request.plant_configuration.model_dump(),
         jar_test_id=request.jar_test_id,
         created_at=now,
         updated_at=now,
     )
 
-    projects_db[project_id] = project
-    return project.model_dump()
+    db.add(project)
+    await db.flush()
+    await db.refresh(project)
+
+    return project.to_dict()
 
 
 @router.put(
@@ -101,9 +120,17 @@ async def create_project(request: ProjectCreate) -> Dict[str, Any]:
         404: {"description": "Project not found"},
     },
 )
-async def update_project(project_id: str, request: ProjectUpdate) -> Dict[str, Any]:
+async def update_project(
+    project_id: str,
+    request: ProjectUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """Update an existing project."""
-    project = projects_db.get(project_id)
+    result = await db.execute(
+        select(ProjectModel).where(ProjectModel.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+
     if not project:
         raise HTTPException(
             status_code=404,
@@ -118,15 +145,17 @@ async def update_project(project_id: str, request: ProjectUpdate) -> Dict[str, A
     if "description" in update_data:
         project.description = update_data["description"]
     if "plant_configuration" in update_data and update_data["plant_configuration"]:
-        project.plant_configuration = PlantConfiguration(**update_data["plant_configuration"])
+        project.plant_configuration = update_data["plant_configuration"]
     if "jar_test_id" in update_data:
         project.jar_test_id = update_data["jar_test_id"]
 
     # Always update timestamp
     project.updated_at = datetime.utcnow()
 
-    projects_db[project_id] = project
-    return project.model_dump()
+    await db.flush()
+    await db.refresh(project)
+
+    return project.to_dict()
 
 
 @router.delete(
@@ -138,19 +167,21 @@ async def update_project(project_id: str, request: ProjectUpdate) -> Dict[str, A
         404: {"description": "Project not found"},
     },
 )
-async def delete_project(project_id: str):
+async def delete_project(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+):
     """Delete a project."""
-    if project_id not in projects_db:
+    result = await db.execute(
+        select(ProjectModel).where(ProjectModel.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+
+    if not project:
         raise HTTPException(
             status_code=404,
             detail=f"Project not found: {project_id}",
         )
 
-    del projects_db[project_id]
+    await db.delete(project)
     return None
-
-
-# Export for use in seed data
-def get_projects_db() -> Dict[str, Project]:
-    """Get reference to projects database."""
-    return projects_db

@@ -1,35 +1,38 @@
 """
-JarTest CRUD endpoints.
+JarTest CRUD endpoints with async database.
 """
-from datetime import datetime, date
-from typing import Dict, Any, List
-from fastapi import APIRouter, HTTPException, Query
+from datetime import datetime, date as date_type
+from typing import Dict, Any
+from fastapi import APIRouter, HTTPException, Query, Depends
+
+from sqlalchemy import select, func, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import JarTestCreate, JarTestResponse, JarTestListResponse
-from app.models.jar_test import (
-    JarTest,
-    JarTestSample,
-    JarTestPolymer,
-    JarTestDose,
-    JarTestAnalysis,
-)
+from app.db.database import get_db
+from app.db.models import JarTestModel, JarTestCounterModel
 
 router = APIRouter()
 
-# In-memory storage for MVP
-# TODO: Replace with database integration
-jar_tests_db: Dict[str, JarTest] = {}
 
-# Counter for generating sequential IDs
-_jar_test_counter = 0
-
-
-def _generate_jar_test_id() -> str:
-    """Generate a sequential jar test ID like JT-2024-001."""
-    global _jar_test_counter
-    _jar_test_counter += 1
+async def generate_jar_test_id(db: AsyncSession) -> str:
+    """Generate a sequential jar test ID like JT-2025-001."""
     year = datetime.now().year
-    return f"JT-{year}-{_jar_test_counter:03d}"
+
+    # Get or create counter for current year
+    result = await db.execute(
+        select(JarTestCounterModel).where(JarTestCounterModel.year == year)
+    )
+    counter = result.scalar_one_or_none()
+
+    if counter is None:
+        counter = JarTestCounterModel(year=year, counter=1)
+        db.add(counter)
+    else:
+        counter.counter += 1
+
+    await db.flush()
+    return f"JT-{year}-{counter.counter:03d}"
 
 
 @router.get(
@@ -41,17 +44,24 @@ def _generate_jar_test_id() -> str:
 async def list_jar_tests(
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(100, ge=1, le=100, description="Max items to return"),
+    db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """List all jar tests with pagination."""
-    all_tests = list(jar_tests_db.values())
-    # Sort by date descending (most recent first)
-    all_tests.sort(key=lambda t: t.date, reverse=True)
+    # Get total count
+    count_result = await db.execute(select(func.count(JarTestModel.id)))
+    total = count_result.scalar() or 0
 
-    total = len(all_tests)
-    items = all_tests[skip : skip + limit]
+    # Get paginated items, sorted by date descending
+    result = await db.execute(
+        select(JarTestModel)
+        .order_by(JarTestModel.date.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    jar_tests = result.scalars().all()
 
     return {
-        "items": [_jar_test_to_response(t) for t in items],
+        "items": [jt.to_dict() for jt in jar_tests],
         "total": total,
     }
 
@@ -65,15 +75,22 @@ async def list_jar_tests(
         404: {"description": "Jar test not found"},
     },
 )
-async def get_jar_test(jar_test_id: str) -> Dict[str, Any]:
+async def get_jar_test(
+    jar_test_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """Get a single jar test by ID."""
-    jar_test = jar_tests_db.get(jar_test_id)
+    result = await db.execute(
+        select(JarTestModel).where(JarTestModel.id == jar_test_id)
+    )
+    jar_test = result.scalar_one_or_none()
+
     if not jar_test:
         raise HTTPException(
             status_code=404,
             detail=f"Jar test not found: {jar_test_id}",
         )
-    return _jar_test_to_response(jar_test)
+    return jar_test.to_dict()
 
 
 @router.post(
@@ -83,34 +100,40 @@ async def get_jar_test(jar_test_id: str) -> Dict[str, Any]:
     summary="Create a new jar test",
     description="Create a new jar test record with dose data and analysis.",
 )
-async def create_jar_test(request: JarTestCreate) -> Dict[str, Any]:
+async def create_jar_test(
+    request: JarTestCreate,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """Create a new jar test."""
-    jar_test_id = _generate_jar_test_id()
-    now = datetime.utcnow()
-
     # Parse date string
     try:
-        test_date = date.fromisoformat(request.date)
+        test_date = date_type.fromisoformat(request.date)
     except ValueError:
         raise HTTPException(
             status_code=422,
             detail=f"Invalid date format: {request.date}. Use YYYY-MM-DD.",
         )
 
-    jar_test = JarTest(
+    jar_test_id = await generate_jar_test_id(db)
+    now = datetime.utcnow()
+
+    jar_test = JarTestModel(
         id=jar_test_id,
         date=test_date,
-        sample=request.sample,
-        polymer=request.polymer,
-        doses=request.doses,
-        analysis=request.analysis,
+        sample=request.sample.model_dump(),
+        polymer=request.polymer.model_dump(),
+        doses=[d.model_dump() for d in request.doses],
+        analysis=request.analysis.model_dump(),
         notes=request.notes,
         created_at=now,
         updated_at=now,
     )
 
-    jar_tests_db[jar_test_id] = jar_test
-    return _jar_test_to_response(jar_test)
+    db.add(jar_test)
+    await db.flush()
+    await db.refresh(jar_test)
+
+    return jar_test.to_dict()
 
 
 @router.put(
@@ -122,39 +145,45 @@ async def create_jar_test(request: JarTestCreate) -> Dict[str, Any]:
         404: {"description": "Jar test not found"},
     },
 )
-async def update_jar_test(jar_test_id: str, request: JarTestCreate) -> Dict[str, Any]:
+async def update_jar_test(
+    jar_test_id: str,
+    request: JarTestCreate,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """Update an existing jar test (full replacement)."""
-    if jar_test_id not in jar_tests_db:
+    result = await db.execute(
+        select(JarTestModel).where(JarTestModel.id == jar_test_id)
+    )
+    jar_test = result.scalar_one_or_none()
+
+    if not jar_test:
         raise HTTPException(
             status_code=404,
             detail=f"Jar test not found: {jar_test_id}",
         )
 
-    existing = jar_tests_db[jar_test_id]
-
     # Parse date string
     try:
-        test_date = date.fromisoformat(request.date)
+        test_date = date_type.fromisoformat(request.date)
     except ValueError:
         raise HTTPException(
             status_code=422,
             detail=f"Invalid date format: {request.date}. Use YYYY-MM-DD.",
         )
 
-    jar_test = JarTest(
-        id=jar_test_id,
-        date=test_date,
-        sample=request.sample,
-        polymer=request.polymer,
-        doses=request.doses,
-        analysis=request.analysis,
-        notes=request.notes,
-        created_at=existing.created_at,
-        updated_at=datetime.utcnow(),
-    )
+    # Update fields
+    jar_test.date = test_date
+    jar_test.sample = request.sample.model_dump()
+    jar_test.polymer = request.polymer.model_dump()
+    jar_test.doses = [d.model_dump() for d in request.doses]
+    jar_test.analysis = request.analysis.model_dump()
+    jar_test.notes = request.notes
+    jar_test.updated_at = datetime.utcnow()
 
-    jar_tests_db[jar_test_id] = jar_test
-    return _jar_test_to_response(jar_test)
+    await db.flush()
+    await db.refresh(jar_test)
+
+    return jar_test.to_dict()
 
 
 @router.delete(
@@ -166,34 +195,21 @@ async def update_jar_test(jar_test_id: str, request: JarTestCreate) -> Dict[str,
         404: {"description": "Jar test not found"},
     },
 )
-async def delete_jar_test(jar_test_id: str):
+async def delete_jar_test(
+    jar_test_id: str,
+    db: AsyncSession = Depends(get_db),
+):
     """Delete a jar test."""
-    if jar_test_id not in jar_tests_db:
+    result = await db.execute(
+        select(JarTestModel).where(JarTestModel.id == jar_test_id)
+    )
+    jar_test = result.scalar_one_or_none()
+
+    if not jar_test:
         raise HTTPException(
             status_code=404,
             detail=f"Jar test not found: {jar_test_id}",
         )
 
-    del jar_tests_db[jar_test_id]
+    await db.delete(jar_test)
     return None
-
-
-def _jar_test_to_response(jar_test: JarTest) -> Dict[str, Any]:
-    """Convert JarTest to response format."""
-    return {
-        "id": jar_test.id,
-        "date": jar_test.date.isoformat(),
-        "sample": jar_test.sample.model_dump(),
-        "polymer": jar_test.polymer.model_dump(),
-        "doses": [d.model_dump() for d in jar_test.doses],
-        "analysis": jar_test.analysis.model_dump(),
-        "notes": jar_test.notes,
-        "created_at": jar_test.created_at,
-        "updated_at": jar_test.updated_at,
-    }
-
-
-# Export for use in other modules
-def get_jar_tests_db() -> Dict[str, JarTest]:
-    """Get reference to jar tests database."""
-    return jar_tests_db

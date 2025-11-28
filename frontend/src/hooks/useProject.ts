@@ -133,7 +133,7 @@ export function useSaveAsProject() {
       name,
       description,
       plant_configuration: plantConfiguration,
-      linked_jar_test_id: selectedJarTestId || undefined,
+      jar_test_id: selectedJarTestId || undefined,
     });
   };
 
@@ -162,7 +162,7 @@ export function useSaveProject() {
       id: currentProject.id,
       data: {
         plant_configuration: plantConfiguration,
-        linked_jar_test_id: selectedJarTestId || undefined,
+        jar_test_id: selectedJarTestId || undefined,
       },
     });
   };
