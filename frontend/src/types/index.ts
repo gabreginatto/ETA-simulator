@@ -55,10 +55,31 @@ export interface ThickenerParams {
 }
 
 export interface PlantSettings {
+  // Existing fields
   polymer_price_per_kg?: number;
   electricity_price_per_kwh?: number;
   operating_hours_per_day?: number;
   currency?: string;
+
+  // Coagulant settings
+  coagulant_price_per_kg?: number;
+  coagulant_dose_mg_L?: number;
+
+  // Filtration settings
+  filter_runtime_hours_to_clog?: number;
+  filter_flow_m3_h?: number;
+  filters_in_parallel?: number;
+  backwash_volume_m3?: number;
+  backwash_time_hours?: number;
+  water_cost_per_m3?: number;
+  product_price_per_m3?: number;
+
+  // Sludge disposal settings
+  disposal_cost_per_ton_wet?: number;
+
+  // Logistics settings
+  storage_cost_per_kg?: number;
+  handling_cost_per_kg?: number;
 }
 
 // Plant configuration structure
@@ -76,6 +97,15 @@ export interface PlantConfiguration {
     parameters: DewateringUnitParams;
   };
   settings: PlantSettings;
+}
+
+// TCO breakdown by pillar (reused for all time periods)
+export interface TCOBreakdown {
+  chemicals: number;
+  filtration: number;
+  sludge: number;
+  logistics: number;
+  total: number;
 }
 
 // KPIs from simulation
@@ -113,6 +143,12 @@ export interface KPIs {
   energy_cost_per_day?: number;
   energy_cost_per_month?: number;
   energy_cost_per_year?: number;
+
+  // TCO (Total Cost of Ownership) metrics
+  tco_per_1000m3?: TCOBreakdown;  // Unitary cost for benchmarking
+  tco_per_day?: TCOBreakdown;      // Daily plant cost
+  tco_per_month?: TCOBreakdown;    // Monthly plant cost
+  tco_per_year?: TCOBreakdown;     // Annual plant cost
 }
 
 // Simulation result

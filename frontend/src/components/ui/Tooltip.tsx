@@ -64,8 +64,8 @@ export function Tooltip({
       {isVisible && (
         <div
           className={`
-            absolute z-50 px-2 py-1 text-xs font-medium text-white
-            bg-slate-800 rounded shadow-lg whitespace-nowrap
+            absolute z-50 px-2 py-1.5 text-xs font-medium text-white
+            bg-slate-800 rounded shadow-lg max-w-xs
             pointer-events-none
             ${positionClasses[position]}
           `}

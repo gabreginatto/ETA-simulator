@@ -1,5 +1,5 @@
 /**
- * Panel for displaying simulation results and KPIs.
+ * Panel for displaying simulation results, KPIs, and TCO analysis.
  */
 import {
   AlertTriangle,
@@ -7,15 +7,68 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
+  Save,
+  X,
 } from "lucide-react";
 import { useState } from "react";
-import { useStore } from "../../store/useStore";
+import { useStore, useSavedScenario, usePlantConfiguration } from "../../store/useStore";
 import { formatCurrency } from "../../lib/utils";
+import { Tooltip } from "../ui/Tooltip";
+
+// TCO card component
+function TCOCard({
+  label,
+  value,
+  currency,
+  highlight = false,
+  showDash = false,
+}: {
+  label: string;
+  value: number;
+  currency: string;
+  highlight?: boolean;
+  showDash?: boolean;
+}) {
+  const displayValue = value === 0 && showDash;
+  return (
+    <div
+      className={`p-2 rounded-lg border ${
+        highlight
+          ? "bg-emerald-50 border-emerald-200"
+          : "bg-white border-gray-200"
+      }`}
+    >
+      <h5 className={`text-xs font-medium mb-0.5 ${highlight ? "text-emerald-600" : "text-gray-500"}`}>
+        {label}
+      </h5>
+      <p className={`text-sm font-bold ${highlight ? "text-emerald-700" : "text-gray-700"}`}>
+        {displayValue ? (
+          <Tooltip content={`${label} not calculated: missing required inputs`}>
+            <span className="text-gray-400 cursor-help">—</span>
+          </Tooltip>
+        ) : (
+          formatCurrency(value, currency)
+        )}
+      </p>
+    </div>
+  );
+}
+
+// Period selector for TCO
+type TCOPeriod = "day" | "month" | "year";
 
 export function ResultsPanel() {
   const simulationResult = useStore((state) => state.simulationResult);
   const isSimulating = useStore((state) => state.isSimulating);
+  const plantConfiguration = usePlantConfiguration();
+  const savedScenario = useSavedScenario();
+  const saveCurrentAsScenario = useStore((state) => state.saveCurrentAsScenario);
+  const clearSavedScenario = useStore((state) => state.clearSavedScenario);
+  const swapScenarios = useStore((state) => state.swapScenarios);
   const [isExpanded, setIsExpanded] = useState(true);
+  const [tcoPeriod, setTcoPeriod] = useState<TCOPeriod>("month");
+
+  const currency = plantConfiguration.settings.currency || "BRL";
 
   // Loading skeleton
   if (isSimulating) {
@@ -321,6 +374,184 @@ export function ResultsPanel() {
             {kpis.mass_balance_closure_percent.toFixed(2)}%
           </span>
         </div>
+
+        {/* TCO Analysis Section */}
+        {(() => {
+          // Filter TCO-related warnings
+          const tcoWarnings = warnings.filter(w =>
+            /TCO|chemicals|filtration|sludge|logistics|polymer.*price|disposal|backwash/i.test(w)
+          );
+
+          return (
+            <div className="pt-4 border-t border-gray-200 space-y-4">
+              {/* Header with currency badge */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-gray-700">TCO Analysis</h4>
+                  <span className="text-xs px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 font-medium">
+                    {currency}
+                  </span>
+                </div>
+                <button
+                  onClick={() => saveCurrentAsScenario("Current")}
+                  className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                  title="Save for comparison"
+                >
+                  <Save className="w-3 h-3" />
+                  Save Scenario
+                </button>
+              </div>
+
+              {/* TCO Warnings Banner */}
+              {tcoWarnings.length > 0 && (
+                <div className="p-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-700">
+                  <span className="font-medium">TCO incomplete:</span> {tcoWarnings[0]}
+                  {tcoWarnings.length > 1 && (
+                    <Tooltip content={tcoWarnings.slice(1).join('\n')} position="bottom">
+                      <span className="ml-1 underline cursor-help">
+                        +{tcoWarnings.length - 1} more
+                      </span>
+                    </Tooltip>
+                  )}
+                </div>
+              )}
+
+              {!kpis.tco_per_1000m3 ? (
+                <div className="text-sm text-gray-500 italic p-3 bg-gray-50 rounded-md">
+                  TCO not available: configure cost inputs in Settings
+                </div>
+              ) : (
+                <>
+                  {/* Unitary Cost (per 1000 m³) - Gray background section */}
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h5 className="text-xs font-semibold text-gray-700">Unitary TCO (per 1,000 m³)</h5>
+                      <span className="text-xs text-gray-500">For benchmarking</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                      <TCOCard label="Total" value={kpis.tco_per_1000m3.total} currency={currency} highlight />
+                      <TCOCard label="Chemicals" value={kpis.tco_per_1000m3.chemicals} currency={currency} showDash />
+                      <TCOCard label="Filtration" value={kpis.tco_per_1000m3.filtration} currency={currency} showDash />
+                      <TCOCard label="Sludge" value={kpis.tco_per_1000m3.sludge} currency={currency} showDash />
+                      <TCOCard label="Logistics" value={kpis.tco_per_1000m3.logistics} currency={currency} showDash />
+                    </div>
+                  </div>
+
+                  {/* Total Plant Cost - White with border section */}
+                  <div className="bg-white p-3 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <h5 className="text-xs font-semibold text-gray-700">Total Plant Cost</h5>
+                        <span className="text-xs text-gray-500">
+                          ({streams.feed.volumetric_flow_m3_h.toFixed(0)} m³/h × {plantConfiguration.settings.operating_hours_per_day || 24}h/day)
+                        </span>
+                      </div>
+                      <div className="flex gap-1">
+                        {(["day", "month", "year"] as TCOPeriod[]).map((period) => (
+                          <button
+                            key={period}
+                            onClick={() => setTcoPeriod(period)}
+                            className={`px-2 py-0.5 text-xs rounded ${
+                              tcoPeriod === period
+                                ? "bg-blue-600 text-white"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            }`}
+                          >
+                            {period === "day" ? "Day" : period === "month" ? "Month" : "Year"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {(() => {
+                      const tco =
+                        tcoPeriod === "day"
+                          ? kpis.tco_per_day
+                          : tcoPeriod === "month"
+                          ? kpis.tco_per_month
+                          : kpis.tco_per_year;
+                      if (!tco) return null;
+                      return (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                          <TCOCard label="Total" value={tco.total} currency={currency} highlight />
+                          <TCOCard label="Chemicals" value={tco.chemicals} currency={currency} showDash />
+                          <TCOCard label="Filtration" value={tco.filtration} currency={currency} showDash />
+                          <TCOCard label="Sludge" value={tco.sludge} currency={currency} showDash />
+                          <TCOCard label="Logistics" value={tco.logistics} currency={currency} showDash />
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Scenario Comparison */}
+                  {savedScenario && kpis.tco_per_1000m3 && (
+                    <div className="pt-3 border-t border-gray-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <h5 className="text-xs font-semibold text-gray-700">Scenario Comparison (per 1,000 m³)</h5>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            Saved: {new Date(savedScenario.timestamp).toLocaleDateString()} • {savedScenario.settings.currency} • {savedScenario.settings.operating_hours_per_day || 24}h/day
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={swapScenarios}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                            title="Replace saved baseline with current results"
+                          >
+                            <Save className="w-3 h-3" />
+                            Update Baseline
+                          </button>
+                          <button
+                            onClick={clearSavedScenario}
+                            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-3 h-3" />
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="sticky top-0 bg-white z-10">
+                            <tr className="bg-gray-50">
+                              <th className="px-2 py-1 text-left font-medium text-gray-600">Pillar</th>
+                              <th className="px-2 py-1 text-right font-medium text-gray-600">Saved</th>
+                              <th className="px-2 py-1 text-right font-medium text-gray-600">Current</th>
+                              <th className="px-2 py-1 text-right font-medium text-gray-600">Delta</th>
+                              <th className="px-2 py-1 text-right font-medium text-gray-600">%</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {(["chemicals", "filtration", "sludge", "logistics", "total"] as const).map((pillar) => {
+                              const savedVal = savedScenario.result.kpis.tco_per_1000m3?.[pillar] || 0;
+                              const currentVal = kpis.tco_per_1000m3?.[pillar] || 0;
+                              const delta = currentVal - savedVal;
+                              const pctChange = savedVal !== 0 ? (delta / savedVal) * 100 : 0;
+                              const isTotal = pillar === "total";
+                              return (
+                                <tr key={pillar} className={isTotal ? "font-semibold bg-gray-50" : ""}>
+                                  <td className="px-2 py-1 capitalize">{pillar}</td>
+                                  <td className="px-2 py-1 text-right">{formatCurrency(savedVal, currency)}</td>
+                                  <td className="px-2 py-1 text-right">{formatCurrency(currentVal, currency)}</td>
+                                  <td className={`px-2 py-1 text-right ${delta < 0 ? "text-emerald-600" : delta > 0 ? "text-red-600" : ""}`}>
+                                    {delta < 0 ? "−" : "+"}{formatCurrency(Math.abs(delta), currency)}
+                                  </td>
+                                  <td className={`px-2 py-1 text-right ${delta < 0 ? "text-emerald-600" : delta > 0 ? "text-red-600" : ""}`}>
+                                    {delta < 0 ? "−" : "+"}{Math.abs(pctChange).toFixed(1)}%
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

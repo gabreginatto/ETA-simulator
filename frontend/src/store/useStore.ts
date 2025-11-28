@@ -63,10 +63,17 @@ const DEFAULT_PLANT_CONFIG: PlantConfiguration = {
     },
   },
   settings: {
+    // Basic settings
     polymer_price_per_kg: 5.0,
     electricity_price_per_kwh: 0.12,
     operating_hours_per_day: 24.0,
-    currency: "USD",
+    currency: "BRL",
+
+    // TCO defaults
+    water_cost_per_m3: 2.0,
+    disposal_cost_per_ton_wet: 100.0,
+    storage_cost_per_kg: 0.5,
+    handling_cost_per_kg: 0.2,
   },
 };
 
@@ -142,6 +149,14 @@ const createDefaultEdges = (): Edge[] => [
   },
 ];
 
+// Scenario for TCO comparison
+interface ScenarioSnapshot {
+  name: string;
+  timestamp: number;
+  settings: PlantConfiguration["settings"];
+  result: SimulationResult;
+}
+
 interface PlantState {
   // React Flow state
   nodes: Node<EquipmentNodeData>[];
@@ -167,6 +182,9 @@ interface PlantState {
   jarTests: JarTest[];
   selectedJarTestId: string | null;
 
+  // TCO Scenario comparison
+  savedScenario: ScenarioSnapshot | null;
+
   // Actions
   initializeDefaultPlant: () => void;
   setNodes: (nodes: Node<EquipmentNodeData>[]) => void;
@@ -191,10 +209,15 @@ interface PlantState {
   setValidationWarnings: (warnings: ValidationError[]) => void;
   setIsValidating: (value: boolean) => void;
   clearValidation: () => void;
+
+  // TCO Scenario comparison actions
+  saveCurrentAsScenario: (name: string) => void;
+  clearSavedScenario: () => void;
+  swapScenarios: () => void;
 }
 
 export const useStore = create<PlantState>()(
-  immer((set, _get) => ({
+  immer((set) => ({
     // Initial state
     nodes: createDefaultNodes(),
     edges: createDefaultEdges(),
@@ -208,6 +231,7 @@ export const useStore = create<PlantState>()(
     isValidating: false,
     jarTests: [],
     selectedJarTestId: null,
+    savedScenario: null,
 
     // Initialize default plant layout
     initializeDefaultPlant: () =>
@@ -535,6 +559,41 @@ export const useStore = create<PlantState>()(
         state.validationErrors = [];
         state.validationWarnings = [];
       }),
+
+    // Save current simulation as a scenario for comparison
+    saveCurrentAsScenario: (name) =>
+      set((state) => {
+        if (state.simulationResult) {
+          state.savedScenario = {
+            name,
+            timestamp: Date.now(),
+            settings: { ...state.plantConfiguration.settings },
+            result: state.simulationResult,
+          };
+        }
+      }),
+
+    // Clear the saved scenario
+    clearSavedScenario: () =>
+      set((state) => {
+        state.savedScenario = null;
+      }),
+
+    // Swap current and saved scenarios
+    // This saves the current simulation as the new baseline for comparison
+    // The old baseline is discarded since we can't restore plant state from a snapshot
+    swapScenarios: () =>
+      set((state) => {
+        if (state.savedScenario && state.simulationResult) {
+          // Save current as the new baseline
+          state.savedScenario = {
+            name: state.savedScenario.name === "Current" ? "Baseline" : "Current",
+            timestamp: Date.now(),
+            settings: { ...state.plantConfiguration.settings },
+            result: state.simulationResult,
+          };
+        }
+      }),
   }))
 );
 
@@ -548,6 +607,7 @@ export const useIsSimulating = () => useStore((state) => state.isSimulating);
 export const useCurrentProject = () => useStore((state) => state.currentProject);
 export const useJarTestsState = () => useStore((state) => state.jarTests);
 export const useSelectedJarTestId = () => useStore((state) => state.selectedJarTestId);
+export const useSavedScenario = () => useStore((state) => state.savedScenario);
 
 // Validation selectors
 export const useValidationErrors = () => useStore((state) => state.validationErrors);

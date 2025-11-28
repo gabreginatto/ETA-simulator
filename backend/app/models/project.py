@@ -44,12 +44,33 @@ class PumpParams(BaseModel):
 
 
 class PlantSettings(BaseModel):
-    """Plant operating settings."""
+    """Plant operating settings including TCO parameters."""
 
+    # Existing fields
     polymer_price_per_kg: Optional[float] = Field(None, ge=0, description="Polymer cost per kg")
     electricity_price_per_kwh: Optional[float] = Field(None, ge=0, description="Electricity cost per kWh")
     operating_hours_per_day: float = Field(default=24.0, gt=0, le=24, description="Operating hours")
-    currency: str = Field(default="USD", description="Currency for cost display")
+    currency: str = Field(default="BRL", description="Currency for cost display")
+
+    # Coagulant settings
+    coagulant_price_per_kg: Optional[float] = Field(None, ge=0, description="Coagulant cost per kg")
+    coagulant_dose_mg_L: Optional[float] = Field(None, ge=0, description="Coagulant dose in mg/L")
+
+    # Filtration settings
+    filter_runtime_hours_to_clog: Optional[float] = Field(None, gt=0, description="Filter runtime until clogging (hours)")
+    filter_flow_m3_h: Optional[float] = Field(None, gt=0, description="Flow per filter (m³/h)")
+    filters_in_parallel: Optional[int] = Field(None, ge=1, description="Number of filters in parallel")
+    backwash_volume_m3: Optional[float] = Field(None, gt=0, description="Backwash volume per cycle (m³)")
+    backwash_time_hours: Optional[float] = Field(None, ge=0, description="Backwash duration (hours)")
+    water_cost_per_m3: Optional[float] = Field(None, ge=0, description="Water cost per m³")
+    product_price_per_m3: Optional[float] = Field(None, ge=0, description="Product selling price per m³")
+
+    # Sludge disposal settings
+    disposal_cost_per_ton_wet: Optional[float] = Field(None, ge=0, description="Sludge disposal cost per wet ton")
+
+    # Logistics settings
+    storage_cost_per_kg: Optional[float] = Field(None, ge=0, description="Chemical storage cost per kg")
+    handling_cost_per_kg: Optional[float] = Field(None, ge=0, description="Chemical handling cost per kg")
 
 
 class PlantConfiguration(BaseModel):
@@ -196,6 +217,11 @@ def get_default_plant_configuration() -> PlantConfiguration:
             "polymer_price_per_kg": None,
             "electricity_price_per_kwh": None,
             "operating_hours_per_day": 24.0,
-            "currency": "USD",
+            "currency": "BRL",
+            # TCO defaults
+            "water_cost_per_m3": 2.0,
+            "disposal_cost_per_ton_wet": 100.0,
+            "storage_cost_per_kg": 0.5,
+            "handling_cost_per_kg": 0.2,
         },
     )

@@ -48,6 +48,8 @@ from app.engine.dewatering_unit import (
     validate_dewatering_parameters,
 )
 from app.engine.kpis import compute_kpis, generate_kpi_warnings
+from app.engine.tco import compute_tco
+from app.engine.tco_validation import validate_tco_settings
 from app.engine.graph import (
     Connection,
     GraphValidator,
@@ -503,6 +505,28 @@ def solve_graph(
             operating_hours_per_day=settings.get("operating_hours_per_day", 24.0),
             pump_power_kW=pump_power,
         )
+
+        # ---------------------------------------------------------------------
+        # 6b. Compute TCO (Total Cost of Ownership)
+        # ---------------------------------------------------------------------
+        tco_validation_warnings = validate_tco_settings(settings)
+        result["warnings"].extend(tco_validation_warnings)
+
+        tco_results, tco_warnings = compute_tco(
+            feed=feed_stream,
+            conditioned=conditioned_stream,
+            cake=cake_stream,
+            liquid=liquid_stream,
+            settings=settings,
+        )
+
+        # Add TCO results to KPIs
+        kpis["tco_per_1000m3"] = tco_results["per_1000m3"]
+        kpis["tco_per_day"] = tco_results["per_day"]
+        kpis["tco_per_month"] = tco_results["per_month"]
+        kpis["tco_per_year"] = tco_results["per_year"]
+
+        result["warnings"].extend(tco_warnings)
 
         # ---------------------------------------------------------------------
         # 7. Generate warnings
