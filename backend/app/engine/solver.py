@@ -55,6 +55,8 @@ from app.engine.graph import (
     validate_graph,
     VALID_NODE_TYPES,
 )
+from app.engine.clarifier import simulate_clarifier
+from app.engine.thickener import simulate_thickener
 
 
 # =============================================================================
@@ -139,6 +141,40 @@ def execute_dewatering(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dic
         liquid_stream_id="liquid",
     )
     return {"cake": cake, "liquid": liquid}
+
+
+@register_node("clarifier")
+def execute_clarifier(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute clarifier node - splits into overflow and underflow."""
+    input_stream = inputs.get("input")
+    if not input_stream:
+        raise ValueError("Clarifier requires input stream")
+
+    result = simulate_clarifier(
+        feed=input_stream,
+        underflow_rate_m3_h=params.get("underflow_rate_m3_h", 10.0),
+        capture_rate=params.get("capture_rate", 0.98),
+        overflow_id="clarifier_overflow",
+        underflow_id="clarifier_underflow",
+    )
+    return {"overflow": result["overflow"], "underflow": result["underflow"]}
+
+
+@register_node("thickener")
+def execute_thickener(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute thickener node - concentrates sludge."""
+    input_stream = inputs.get("input")
+    if not input_stream:
+        raise ValueError("Thickener requires input stream")
+
+    result = simulate_thickener(
+        feed=input_stream,
+        target_thickened_ts_percent=params.get("target_thickened_ts_percent", 5.0),
+        capture_rate=params.get("capture_rate", 0.95),
+        supernatant_id="thickener_supernatant",
+        thickened_id="thickener_sludge",
+    )
+    return {"thickened": result["thickened"], "supernatant": result["supernatant"]}
 
 
 # =============================================================================
@@ -424,6 +460,14 @@ def solve_graph(
         liquid_stream = _find_stream_by_type(nodes, streams, "dewatering", "liquid")
         pump_stream = _find_stream_by_type(nodes, streams, "pump", "output")
 
+        # Clarifier streams (optional)
+        clarifier_overflow = _find_stream_by_type(nodes, streams, "clarifier", "overflow")
+        clarifier_underflow = _find_stream_by_type(nodes, streams, "clarifier", "underflow")
+
+        # Thickener streams (optional)
+        thickened_stream = _find_stream_by_type(nodes, streams, "thickener", "thickened")
+        supernatant_stream = _find_stream_by_type(nodes, streams, "thickener", "supernatant")
+
         # ---------------------------------------------------------------------
         # 5b. Validate required streams exist before KPI calculation
         # ---------------------------------------------------------------------
@@ -482,6 +526,18 @@ def solve_graph(
             response_streams["liquid"] = liquid_stream.to_dict()
         if pump_stream:
             response_streams["pump_out"] = pump_stream.to_dict()
+
+        # Clarifier streams (optional)
+        if clarifier_overflow:
+            response_streams["clarifier_overflow"] = clarifier_overflow.to_dict()
+        if clarifier_underflow:
+            response_streams["clarifier_underflow"] = clarifier_underflow.to_dict()
+
+        # Thickener streams (optional)
+        if thickened_stream:
+            response_streams["thickened"] = thickened_stream.to_dict()
+        if supernatant_stream:
+            response_streams["supernatant"] = supernatant_stream.to_dict()
 
         result["streams"] = response_streams
         result["kpis"] = kpis

@@ -131,6 +131,26 @@ EQUIPMENT_PORTS: Dict[str, EquipmentPorts] = {
             Port("output_b", PortType.SLUDGE, PortDirection.OUTPUT, "Split B")
         ]
     ),
+    # Clarifier - separates into overflow (liquid) and underflow (sludge)
+    "clarifier": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Sludge In")
+        ],
+        outputs=[
+            Port("overflow", PortType.LIQUID, PortDirection.OUTPUT, "Overflow"),
+            Port("underflow", PortType.SLUDGE, PortDirection.OUTPUT, "Underflow")
+        ]
+    ),
+    # Thickener - concentrates sludge, outputs thickened and supernatant
+    "thickener": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Sludge In")
+        ],
+        outputs=[
+            Port("thickened", PortType.SLUDGE, PortDirection.OUTPUT, "Thickened Out"),
+            Port("supernatant", PortType.LIQUID, PortDirection.OUTPUT, "Supernatant")
+        ]
+    ),
 }
 
 
@@ -299,7 +319,7 @@ class GraphValidator:
 # =============================================================================
 
 # Valid node types for the graph-based API
-VALID_NODE_TYPES = {"feed", "pump", "polymer", "dewatering"}
+VALID_NODE_TYPES = {"feed", "pump", "polymer", "dewatering", "clarifier", "thickener"}
 
 
 def build_incoming_edge_map(edges: List[Dict]) -> Dict[str, List[Dict]]:

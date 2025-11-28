@@ -44,6 +44,16 @@ export interface PumpParams {
   efficiency_motor: number;
 }
 
+export interface ClarifierParams {
+  underflow_rate_m3_h: number;
+  capture_rate?: number;
+}
+
+export interface ThickenerParams {
+  target_thickened_ts_percent: number;
+  capture_rate?: number;
+}
+
 export interface PlantSettings {
   polymer_price_per_kg?: number;
   electricity_price_per_kwh?: number;
@@ -114,6 +124,12 @@ export interface SimulationResult {
     cake: StreamData;
     liquid: StreamData;
     pump_out?: StreamData;
+    // Clarifier streams (optional - present when clarifier node exists)
+    clarifier_overflow?: StreamData;
+    clarifier_underflow?: StreamData;
+    // Thickener streams (optional - present when thickener node exists)
+    thickened?: StreamData;
+    supernatant?: StreamData;
   };
   kpis: KPIs;
   warnings: string[];
@@ -168,7 +184,7 @@ export interface Project {
 }
 
 // React Flow node data types
-export type EquipmentType = "feed" | "polymer" | "dewatering" | "pump";
+export type EquipmentType = "feed" | "polymer" | "dewatering" | "pump" | "clarifier" | "thickener";
 
 export interface BaseNodeData {
   type: EquipmentType;
@@ -205,11 +221,27 @@ export interface DewateringNodeData extends BaseNodeData {
   isOverCapacity?: boolean;
 }
 
+export interface ClarifierNodeData extends BaseNodeData {
+  type: "clarifier";
+  parameters: ClarifierParams;
+  overflowStreamData?: StreamData;
+  underflowStreamData?: StreamData;
+}
+
+export interface ThickenerNodeData extends BaseNodeData {
+  type: "thickener";
+  parameters: ThickenerParams;
+  thickenedStreamData?: StreamData;
+  supernatantStreamData?: StreamData;
+}
+
 export type EquipmentNodeData =
   | FeedNodeData
   | PumpNodeData
   | PolymerNodeData
-  | DewateringNodeData;
+  | DewateringNodeData
+  | ClarifierNodeData
+  | ThickenerNodeData;
 
 // ============================================
 // Graph types for connection validation
@@ -249,6 +281,20 @@ export const EQUIPMENT_PORTS: Record<EquipmentType, EquipmentPorts> = {
     outputs: [
       { id: "cake", portType: "cake", direction: "output", label: "Cake Out" },
       { id: "liquid", portType: "liquid", direction: "output", label: "Centrate Out" },
+    ],
+  },
+  clarifier: {
+    inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Sludge In" }],
+    outputs: [
+      { id: "overflow", portType: "liquid", direction: "output", label: "Overflow" },
+      { id: "underflow", portType: "sludge", direction: "output", label: "Underflow" },
+    ],
+  },
+  thickener: {
+    inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Sludge In" }],
+    outputs: [
+      { id: "thickened", portType: "sludge", direction: "output", label: "Thickened Out" },
+      { id: "supernatant", portType: "liquid", direction: "output", label: "Supernatant" },
     ],
   },
 };
@@ -299,7 +345,7 @@ export interface GraphNode {
   id: string;
   type: EquipmentType;
   data: {
-    parameters: FeedSourceParams | PolymerConditionerParams | DewateringUnitParams | PumpParams;
+    parameters: FeedSourceParams | PolymerConditionerParams | DewateringUnitParams | PumpParams | ClarifierParams | ThickenerParams;
   };
 }
 

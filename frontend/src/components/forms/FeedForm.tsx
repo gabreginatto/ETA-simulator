@@ -17,7 +17,9 @@ export function FeedForm({ nodeId, parameters }: FeedFormProps) {
   // Get validation errors/warnings from backend for each field
   const flowErrors = useErrorsForPath("feed_source.parameters.flow_m3_h");
   const tsErrors = useErrorsForPath("feed_source.parameters.ts_percent");
-  const tempErrors = useErrorsForPath("feed_source.parameters.temperature_C");
+  // tempErrors available for future use if temperature validation added
+  const _tempErrors = useErrorsForPath("feed_source.parameters.temperature_C");
+  void _tempErrors; // suppress unused warning
   const flowWarnings = useWarningsForPath("feed_source.parameters.flow_m3_h");
   const tsWarnings = useWarningsForPath("feed_source.parameters.ts_percent");
 

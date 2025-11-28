@@ -1,17 +1,21 @@
 /**
  * Right sidebar panel for editing equipment properties.
  */
-import { X, Droplets, FlaskConical, Factory, Activity } from "lucide-react";
+import { X, Droplets, FlaskConical, Factory, Activity, Layers, CircleDot } from "lucide-react";
 import { useStore, useSelectedNode } from "../../store/useStore";
 import { FeedForm } from "../forms/FeedForm";
 import { PumpForm } from "../forms/PumpForm";
 import { PolymerForm } from "../forms/PolymerForm";
 import { DewateringForm } from "../forms/DewateringForm";
+import { ClarifierForm } from "../forms/ClarifierForm";
+import { ThickenerForm } from "../forms/ThickenerForm";
 import type {
   FeedNodeData,
   PumpNodeData,
   PolymerNodeData,
   DewateringNodeData,
+  ClarifierNodeData,
+  ThickenerNodeData,
 } from "../../types";
 
 export function PropertiesPanel() {
@@ -65,6 +69,20 @@ export function PropertiesPanel() {
           icon: <Factory className="w-5 h-5" />,
           title: "Dewatering Unit",
           bgColor: "bg-orange-500",
+          textColor: "text-white",
+        };
+      case "clarifier":
+        return {
+          icon: <Layers className="w-5 h-5" />,
+          title: "Clarifier",
+          bgColor: "bg-blue-500",
+          textColor: "text-white",
+        };
+      case "thickener":
+        return {
+          icon: <CircleDot className="w-5 h-5" />,
+          title: "Thickener",
+          bgColor: "bg-emerald-500",
           textColor: "text-white",
         };
       default:
@@ -122,6 +140,18 @@ export function PropertiesPanel() {
           <DewateringForm
             nodeId={selectedNode.id}
             parameters={(nodeData as DewateringNodeData).parameters}
+          />
+        )}
+        {nodeData.type === "clarifier" && (
+          <ClarifierForm
+            nodeId={selectedNode.id}
+            parameters={(nodeData as ClarifierNodeData).parameters}
+          />
+        )}
+        {nodeData.type === "thickener" && (
+          <ThickenerForm
+            nodeId={selectedNode.id}
+            parameters={(nodeData as ThickenerNodeData).parameters}
           />
         )}
       </div>

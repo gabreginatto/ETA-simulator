@@ -22,6 +22,8 @@ import { FeedNode } from "./nodes/FeedNode";
 import { PumpNode } from "./nodes/PumpNode";
 import { PolymerNode } from "./nodes/PolymerNode";
 import { DewateringNode } from "./nodes/DewateringNode";
+import { ClarifierNode } from "./nodes/ClarifierNode";
+import { ThickenerNode } from "./nodes/ThickenerNode";
 import { StreamEdge } from "./edges/StreamEdge";
 import {
   getPortType,
@@ -35,6 +37,8 @@ const nodeTypes: NodeTypes = {
   pump: PumpNode,
   polymer: PolymerNode,
   dewatering: DewateringNode,
+  clarifier: ClarifierNode,
+  thickener: ThickenerNode,
 };
 
 // Register custom edge types
@@ -187,6 +191,10 @@ export function FlowCanvas() {
                 return "#7c3aed"; // violet
               case "dewatering":
                 return "#ea580c"; // orange
+              case "clarifier":
+                return "#3b82f6"; // blue-500
+              case "thickener":
+                return "#10b981"; // emerald-500
               default:
                 return "#64748b"; // slate
             }
