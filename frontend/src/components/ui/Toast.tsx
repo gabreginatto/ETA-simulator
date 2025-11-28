@@ -1,5 +1,6 @@
 /**
  * Simple toast notification component.
+ * Dark glass morphism design.
  */
 import { useEffect, useState } from "react";
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from "lucide-react";
@@ -24,32 +25,32 @@ const icons = {
 
 const colors = {
   success: {
-    bg: "bg-green-50",
-    border: "border-green-200",
-    icon: "text-green-500",
-    title: "text-green-800",
-    message: "text-green-700",
+    bg: "bg-status-success/10",
+    border: "border-status-success/30",
+    icon: "text-status-success",
+    title: "text-status-success",
+    message: "text-status-success/80",
   },
   error: {
-    bg: "bg-red-50",
-    border: "border-red-200",
-    icon: "text-red-500",
-    title: "text-red-800",
-    message: "text-red-700",
+    bg: "bg-status-error/10",
+    border: "border-status-error/30",
+    icon: "text-status-error",
+    title: "text-status-error",
+    message: "text-status-error/80",
   },
   warning: {
-    bg: "bg-yellow-50",
-    border: "border-yellow-200",
-    icon: "text-yellow-500",
-    title: "text-yellow-800",
-    message: "text-yellow-700",
+    bg: "bg-status-warning/10",
+    border: "border-status-warning/30",
+    icon: "text-status-warning",
+    title: "text-status-warning",
+    message: "text-status-warning/80",
   },
   info: {
-    bg: "bg-blue-50",
-    border: "border-blue-200",
-    icon: "text-blue-500",
-    title: "text-blue-800",
-    message: "text-blue-700",
+    bg: "bg-status-info/10",
+    border: "border-status-info/30",
+    icon: "text-status-info",
+    title: "text-status-info",
+    message: "text-status-info/80",
   },
 };
 
@@ -76,8 +77,8 @@ export function Toast({ id, type, title, message, duration = 5000, onClose }: To
   return (
     <div
       className={`
-        ${color.bg} ${color.border}
-        border rounded-lg shadow-lg p-4 max-w-sm w-full
+        glass ${color.bg} ${color.border}
+        border rounded-xl shadow-float p-4 max-w-sm w-full
         transform transition-all duration-200
         ${isExiting ? "opacity-0 translate-x-full" : "opacity-100 translate-x-0"}
       `}

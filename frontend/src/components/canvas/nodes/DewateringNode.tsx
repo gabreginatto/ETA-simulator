@@ -15,13 +15,19 @@ function DewateringNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <div
       className={`
-        w-44 bg-gradient-to-br from-amber-50 to-orange-100
-        rounded-lg shadow-md border-2 transition-all duration-200 relative overflow-visible
+        w-44 rounded-lg shadow-md border-2 transition-all duration-200 relative overflow-visible
         ${isOverCapacity ? "border-yellow-500 shadow-yellow-200" : ""}
-        ${selected && !isOverCapacity ? "border-orange-500 shadow-lg shadow-orange-200" : ""}
-        ${!selected && !isOverCapacity ? "border-orange-200" : ""}
-        hover:shadow-lg hover:border-orange-400
+        ${!isOverCapacity ? "shadow-lg" : ""}
+        hover:shadow-lg
       `}
+      style={{
+        background: "var(--node-dewatering-bg)",
+        borderColor: isOverCapacity
+          ? undefined
+          : selected
+            ? "var(--node-dewatering-accent)"
+            : "var(--node-dewatering-border)",
+      }}
     >
       <NodeDeleteButton nodeId={id} nodeLabel="Dewatering" />
 
@@ -38,13 +44,25 @@ function DewateringNodeComponent({ id, data, selected }: NodeProps) {
         type="target"
         position={Position.Left}
         id="input"
-        className="!w-3 !h-3 !bg-orange-500 !border-2 !border-white"
+        className="!w-3 !h-3 !border-2"
+        style={{
+          backgroundColor: "var(--node-dewatering-accent)",
+          borderColor: "var(--rf-handle-border)",
+        }}
       />
 
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-orange-200 bg-orange-500/10 rounded-t-lg">
-        <Factory className="w-5 h-5 text-orange-600" />
-        <span className="text-sm font-semibold text-orange-800">Dewatering</span>
+      <div
+        className="flex items-center gap-2 px-3 py-2 border-b rounded-t-lg"
+        style={{
+          backgroundColor: "var(--node-dewatering-header)",
+          borderColor: "var(--node-divider)",
+        }}
+      >
+        <Factory className="w-5 h-5" style={{ color: "var(--node-dewatering-accent)" }} />
+        <span className="text-sm font-semibold" style={{ color: "var(--node-dewatering-text)" }}>
+          Dewatering
+        </span>
         {isOverCapacity && (
           <AlertTriangle
             className="w-4 h-4 text-yellow-600 ml-auto cursor-help"
@@ -57,21 +75,27 @@ function DewateringNodeComponent({ id, data, selected }: NodeProps) {
       {/* Content */}
       <div className="px-3 py-2 space-y-1">
         <div className="flex justify-between items-center">
-          <span className="text-xs text-gray-500">Capture</span>
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-xs" style={{ color: "var(--node-text-secondary)" }}>
+            Capture
+          </span>
+          <span className="text-sm font-medium" style={{ color: "var(--node-text-primary)" }}>
             {(parameters.capture_rate * 100).toFixed(0)}%
           </span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="text-xs text-gray-500">Cake DS</span>
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-xs" style={{ color: "var(--node-text-secondary)" }}>
+            Cake DS
+          </span>
+          <span className="text-sm font-medium" style={{ color: "var(--node-text-primary)" }}>
             {parameters.cake_dryness_percent.toFixed(0)}%
           </span>
         </div>
         {parameters.max_flow_m3_h && (
           <div className="flex justify-between items-center">
-            <span className="text-xs text-gray-500">Max Flow</span>
-            <span className={`text-sm font-medium ${isOverCapacity ? "text-yellow-600" : "text-gray-700"}`}>
+            <span className="text-xs" style={{ color: "var(--node-text-secondary)" }}>
+              Max Flow
+            </span>
+            <span className={`text-sm font-medium ${isOverCapacity ? "text-yellow-600" : ""}`} style={!isOverCapacity ? { color: "var(--node-text-primary)" } : undefined}>
               {parameters.max_flow_m3_h.toFixed(0)} m³/h
             </span>
           </div>
@@ -79,11 +103,11 @@ function DewateringNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Output streams info */}
         {(cakeStreamData || liquidStreamData) && (
-          <div className="pt-1 border-t border-orange-100 space-y-1">
+          <div className="pt-1 border-t space-y-1" style={{ borderColor: "var(--node-divider)" }}>
             {cakeStreamData && (
               <div className="flex justify-between items-center">
                 <span className="text-xs text-amber-600">Cake</span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs" style={{ color: "var(--node-text-muted)" }}>
                   {(cakeStreamData.mass_flow_kg_h / 1000).toFixed(1)} t/h
                 </span>
               </div>
@@ -91,7 +115,7 @@ function DewateringNodeComponent({ id, data, selected }: NodeProps) {
             {liquidStreamData && (
               <div className="flex justify-between items-center">
                 <span className="text-xs text-sky-600">Liquid</span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs" style={{ color: "var(--node-text-muted)" }}>
                   {liquidStreamData.volumetric_flow_m3_h.toFixed(1)} m³/h
                 </span>
               </div>
@@ -105,15 +129,22 @@ function DewateringNodeComponent({ id, data, selected }: NodeProps) {
         type="source"
         position={Position.Right}
         id="cake_out"
-        className="!w-3 !h-3 !bg-amber-600 !border-2 !border-white"
-        style={{ top: '30%' }}
+        className="!w-3 !h-3 !border-2"
+        style={{
+          top: '30%',
+          backgroundColor: "var(--node-dewatering-accent)",
+          borderColor: "var(--rf-handle-border)",
+        }}
       />
       <Handle
         type="source"
         position={Position.Right}
         id="liquid_out"
-        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white"
-        style={{ top: '70%' }}
+        className="!w-3 !h-3 !bg-sky-500 !border-2"
+        style={{
+          top: '70%',
+          borderColor: "var(--rf-handle-border)",
+        }}
       />
     </div>
   );

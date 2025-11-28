@@ -2,14 +2,334 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== LIGHT THEME (Default) - Claude Code inspired pastels ===== */
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Geist', system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Surface colors - Light (warm cream/beige tones like Claude Code) */
+  /* RGB channels for Tailwind integration */
+  --surface-canvas-rgb: 250 249 247;
+  --surface-elevated-rgb: 255 255 255;
+  --surface-highlight-rgb: 245 244 242;
+  --surface-muted-rgb: 240 239 237;
+  /* Full color values for direct use */
+  --surface-canvas: #faf9f7;
+  --surface-elevated: #ffffff;
+  --surface-float: rgba(255, 255, 255, 0.97);
+  --surface-overlay: rgba(41, 37, 36, 0.4);
+  --surface-highlight: #f5f4f2;
+  --surface-muted: #f0efed;
+
+  /* Content colors - Light (warm grays) */
+  /* RGB channels for Tailwind integration */
+  --content-primary-rgb: 28 25 23;
+  --content-secondary-rgb: 87 83 78;
+  --content-subtle-rgb: 168 162 158;
+  --content-inverse-rgb: 250 250 249;
+  --content-accent-rgb: 194 65 12;
+  /* Full color values for direct use */
+  --content-primary: #1c1917;
+  --content-secondary: #57534e;
+  --content-subtle: #a8a29e;
+  --content-inverse: #fafaf9;
+  --content-accent: #c2410c;
+
+  /* Glass effects - Light (warmer) */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-light: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(41, 37, 36, 0.08);
+
+  /* Shadows - Light (softer, warmer) */
+  --shadow-dock: 0 -4px 20px rgba(41, 37, 36, 0.06), 0 2px 10px rgba(41, 37, 36, 0.04);
+  --shadow-float: 0 10px 40px -10px rgba(41, 37, 36, 0.12), 0 4px 16px -4px rgba(41, 37, 36, 0.08);
+
+  /* React Flow - Light */
+  --rf-background: #faf9f7;
+  --rf-dots: rgba(41, 37, 36, 0.04);
+  --rf-controls-bg: rgba(255, 255, 255, 0.95);
+  --rf-controls-border: rgba(41, 37, 36, 0.08);
+  --rf-controls-color: #57534e;
+  --rf-controls-hover-bg: #f5f4f2;
+  --rf-controls-hover-color: #1c1917;
+  --rf-handle-border: #ffffff;
+
+  /* Scrollbar - Light */
+  --scrollbar-thumb: rgba(41, 37, 36, 0.15);
+  --scrollbar-thumb-hover: rgba(41, 37, 36, 0.25);
+
+  /* Node colors - Light (soft pastels with warm undertones) */
+  --node-feed-bg: linear-gradient(135deg, #e6f7f7 0%, #ecfeff 100%);
+  --node-feed-border: #99e6e6;
+  --node-feed-header: rgba(20, 184, 166, 0.06);
+  --node-feed-accent: #0d9488;
+  --node-feed-text: #115e59;
+
+  --node-pump-bg: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+  --node-pump-border: #93c5fd;
+  --node-pump-header: rgba(59, 130, 246, 0.06);
+  --node-pump-accent: #2563eb;
+  --node-pump-text: #1e40af;
+
+  --node-polymer-bg: linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%);
+  --node-polymer-border: #c4b5fd;
+  --node-polymer-header: rgba(139, 92, 246, 0.06);
+  --node-polymer-accent: #7c3aed;
+  --node-polymer-text: #5b21b6;
+
+  --node-dewatering-bg: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  --node-dewatering-border: #fdba74;
+  --node-dewatering-header: rgba(249, 115, 22, 0.06);
+  --node-dewatering-accent: #ea580c;
+  --node-dewatering-text: #c2410c;
+
+  --node-clarifier-bg: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  --node-clarifier-border: #86efac;
+  --node-clarifier-header: rgba(34, 197, 94, 0.06);
+  --node-clarifier-accent: #16a34a;
+  --node-clarifier-text: #166534;
+
+  --node-thickener-bg: linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%);
+  --node-thickener-border: #5eead4;
+  --node-thickener-header: rgba(20, 184, 166, 0.06);
+  --node-thickener-accent: #0d9488;
+  --node-thickener-text: #115e59;
+
+  --node-text-primary: #292524;
+  --node-text-secondary: #78716c;
+  --node-text-muted: #a8a29e;
+  --node-divider: rgba(41, 37, 36, 0.06);
+}
+
+/* ===== DARK THEME ===== */
+.dark {
+  /* Surface colors - Dark */
+  /* RGB channels for Tailwind integration */
+  --surface-canvas-rgb: 15 23 42;
+  --surface-elevated-rgb: 30 41 59;
+  --surface-highlight-rgb: 51 65 85;
+  --surface-muted-rgb: 30 41 59;
+  /* Full color values for direct use */
+  --surface-canvas: #0f172a;
+  --surface-elevated: #1e293b;
+  --surface-float: rgba(30, 41, 59, 0.95);
+  --surface-overlay: rgba(15, 23, 42, 0.8);
+  --surface-highlight: #334155;
+  --surface-muted: #1e293b;
+
+  /* Content colors - Dark */
+  /* RGB channels for Tailwind integration */
+  --content-primary-rgb: 248 250 252;
+  --content-secondary-rgb: 148 163 184;
+  --content-subtle-rgb: 100 116 139;
+  --content-inverse-rgb: 15 23 42;
+  --content-accent-rgb: 56 189 248;
+  /* Full color values for direct use */
+  --content-primary: #f8fafc;
+  --content-secondary: #94a3b8;
+  --content-subtle: #64748b;
+  --content-inverse: #0f172a;
+  --content-accent: #38bdf8;
+
+  /* Glass effects - Dark */
+  --glass-bg: rgba(30, 41, 59, 0.7);
+  --glass-light: rgba(248, 250, 252, 0.05);
+  --glass-border: rgba(148, 163, 184, 0.1);
+
+  /* Shadows - Dark */
+  --shadow-dock: 0 -8px 30px rgba(0, 0, 0, 0.3), 0 4px 20px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-float: 0 20px 60px -15px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.3);
+
+  /* React Flow - Dark */
+  --rf-background: #0f172a;
+  --rf-dots: rgba(148, 163, 184, 0.04);
+  --rf-controls-bg: rgba(30, 41, 59, 0.9);
+  --rf-controls-border: rgba(148, 163, 184, 0.1);
+  --rf-controls-color: #94a3b8;
+  --rf-controls-hover-bg: rgba(51, 65, 85, 0.9);
+  --rf-controls-hover-color: #f8fafc;
+  --rf-handle-border: #0f172a;
+
+  /* Scrollbar - Dark */
+  --scrollbar-thumb: rgba(148, 163, 184, 0.3);
+  --scrollbar-thumb-hover: rgba(148, 163, 184, 0.5);
+
+  /* Node colors - Dark (muted, less saturated) */
+  --node-feed-bg: linear-gradient(135deg, rgba(0, 188, 212, 0.12) 0%, rgba(0, 172, 193, 0.08) 100%);
+  --node-feed-border: rgba(0, 188, 212, 0.3);
+  --node-feed-header: rgba(0, 188, 212, 0.1);
+  --node-feed-accent: #26c6da;
+  --node-feed-text: #4dd0e1;
+
+  --node-pump-bg: linear-gradient(135deg, rgba(33, 150, 243, 0.12) 0%, rgba(30, 136, 229, 0.08) 100%);
+  --node-pump-border: rgba(33, 150, 243, 0.3);
+  --node-pump-header: rgba(33, 150, 243, 0.1);
+  --node-pump-accent: #42a5f5;
+  --node-pump-text: #64b5f6;
+
+  --node-polymer-bg: linear-gradient(135deg, rgba(156, 39, 176, 0.12) 0%, rgba(142, 36, 170, 0.08) 100%);
+  --node-polymer-border: rgba(156, 39, 176, 0.3);
+  --node-polymer-header: rgba(156, 39, 176, 0.1);
+  --node-polymer-accent: #ab47bc;
+  --node-polymer-text: #ba68c8;
+
+  --node-dewatering-bg: linear-gradient(135deg, rgba(255, 152, 0, 0.12) 0%, rgba(245, 124, 0, 0.08) 100%);
+  --node-dewatering-border: rgba(255, 152, 0, 0.3);
+  --node-dewatering-header: rgba(255, 152, 0, 0.1);
+  --node-dewatering-accent: #ffa726;
+  --node-dewatering-text: #ffb74d;
+
+  --node-clarifier-bg: linear-gradient(135deg, rgba(76, 175, 80, 0.12) 0%, rgba(67, 160, 71, 0.08) 100%);
+  --node-clarifier-border: rgba(76, 175, 80, 0.3);
+  --node-clarifier-header: rgba(76, 175, 80, 0.1);
+  --node-clarifier-accent: #66bb6a;
+  --node-clarifier-text: #81c784;
+
+  --node-thickener-bg: linear-gradient(135deg, rgba(0, 150, 136, 0.12) 0%, rgba(0, 137, 123, 0.08) 100%);
+  --node-thickener-border: rgba(0, 150, 136, 0.3);
+  --node-thickener-header: rgba(0, 150, 136, 0.1);
+  --node-thickener-accent: #26a69a;
+  --node-thickener-text: #4db6ac;
+
+  --node-text-primary: #e2e8f0;
+  --node-text-secondary: #94a3b8;
+  --node-text-muted: #64748b;
+  --node-divider: rgba(255, 255, 255, 0.06);
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background-color: var(--surface-canvas);
+  color: var(--content-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Glass morphism utility */
+@layer utilities {
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+  }
+
+  .glass-light {
+    background: var(--glass-light);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+  }
+
+  .text-gradient-cyan {
+    background: linear-gradient(135deg, #22d3ee 0%, #0ea5e9 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .border-gradient {
+    border-image: linear-gradient(135deg, rgba(14, 165, 233, 0.3), rgba(34, 211, 238, 0.1)) 1;
+  }
+}
+
+/* React Flow customizations - now using CSS variables */
+.react-flow__background {
+  background-color: var(--rf-background) !important;
+}
+
+.react-flow__background pattern {
+  stroke: var(--rf-dots) !important;
+}
+
+.react-flow__minimap {
+  background-color: var(--surface-elevated) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 12px !important;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(14, 165, 233, 0.1) !important;
+}
+
+.react-flow__controls {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__controls-button {
+  background: var(--rf-controls-bg) !important;
+  border: 1px solid var(--rf-controls-border) !important;
+  border-radius: 8px !important;
+  color: var(--rf-controls-color) !important;
+  margin: 2px !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--rf-controls-hover-bg) !important;
+  color: var(--rf-controls-hover-color) !important;
+}
+
+.react-flow__edge-path {
+  stroke: #38bdf8 !important;
+  stroke-width: 2 !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #0ea5e9 !important;
+  stroke-width: 3 !important;
+}
+
+.react-flow__handle {
+  background: #0ea5e9 !important;
+  border: 2px solid var(--rf-handle-border) !important;
+}
+
+.react-flow__handle:hover {
+  background: #38bdf8 !important;
+}
+
+/* Number input styling */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 0;
+}
+
+input[type="number"]:hover::-webkit-inner-spin-button,
+input[type="number"]:hover::-webkit-outer-spin-button,
+input[type="number"]:focus::-webkit-inner-spin-button,
+input[type="number"]:focus::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+/* Focus ring customization */
+@layer utilities {
+  .focus-ring {
+    @apply outline-none ring-2 ring-primary-500/40 ring-offset-2;
+    ring-offset-color: var(--surface-canvas);
+  }
 }

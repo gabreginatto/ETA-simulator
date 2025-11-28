@@ -1,5 +1,6 @@
 /**
  * Right sidebar panel for editing equipment properties.
+ * Dark glass morphism floating drawer design.
  */
 import { X, Droplets, FlaskConical, Factory, Activity, Layers, CircleDot } from "lucide-react";
 import { useStore, useSelectedNode } from "../../store/useStore";
@@ -24,14 +25,14 @@ export function PropertiesPanel() {
 
   if (!selectedNode) {
     return (
-      <div className="w-80 bg-white border-l border-gray-200 p-6 flex flex-col items-center justify-center text-center h-full">
-        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-          <Factory className="w-8 h-8 text-gray-400" />
+      <div className="w-80 h-full glass rounded-2xl shadow-float flex flex-col items-center justify-center text-center p-8 animate-fade-in">
+        <div className="w-16 h-16 bg-surface-highlight rounded-2xl flex items-center justify-center mb-4">
+          <Factory className="w-8 h-8 text-content-subtle" />
         </div>
-        <h3 className="text-lg font-medium text-gray-700 mb-2">
+        <h3 className="text-lg font-medium text-content-primary mb-2">
           No Equipment Selected
         </h3>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-content-secondary">
           Click on a node in the canvas to edit its parameters
         </p>
       </div>
@@ -47,50 +48,50 @@ export function PropertiesPanel() {
         return {
           icon: <Droplets className="w-5 h-5" />,
           title: "Feed Source",
-          bgColor: "bg-cyan-500",
-          textColor: "text-white",
+          accentColor: "bg-viz-feed",
+          textColor: "text-viz-feed",
         };
       case "pump":
         return {
           icon: <Activity className="w-5 h-5" />,
           title: "Transfer Pump",
-          bgColor: "bg-cyan-500",
-          textColor: "text-white",
+          accentColor: "bg-viz-pump",
+          textColor: "text-viz-pump",
         };
       case "polymer":
         return {
           icon: <FlaskConical className="w-5 h-5" />,
           title: "Polymer Conditioner",
-          bgColor: "bg-violet-500",
-          textColor: "text-white",
+          accentColor: "bg-viz-polymer",
+          textColor: "text-viz-polymer",
         };
       case "dewatering":
         return {
           icon: <Factory className="w-5 h-5" />,
           title: "Dewatering Unit",
-          bgColor: "bg-orange-500",
-          textColor: "text-white",
+          accentColor: "bg-viz-dewatering",
+          textColor: "text-viz-dewatering",
         };
       case "clarifier":
         return {
-          icon: <Layers className="w-5 h-5" />,
+          icon: <CircleDot className="w-5 h-5" />,
           title: "Clarifier",
-          bgColor: "bg-blue-500",
-          textColor: "text-white",
+          accentColor: "bg-viz-clarifier",
+          textColor: "text-viz-clarifier",
         };
       case "thickener":
         return {
-          icon: <CircleDot className="w-5 h-5" />,
+          icon: <Layers className="w-5 h-5" />,
           title: "Thickener",
-          bgColor: "bg-emerald-500",
-          textColor: "text-white",
+          accentColor: "bg-viz-thickener",
+          textColor: "text-viz-thickener",
         };
       default:
         return {
           icon: null,
           title: "Equipment",
-          bgColor: "bg-gray-500",
-          textColor: "text-white",
+          accentColor: "bg-content-subtle",
+          textColor: "text-content-subtle",
         };
     }
   };
@@ -98,21 +99,23 @@ export function PropertiesPanel() {
   const headerStyle = getHeaderStyle();
 
   return (
-    <div className="w-80 bg-white border-l border-gray-200 flex flex-col h-full">
+    <div className="w-80 h-full glass rounded-2xl shadow-float flex flex-col overflow-hidden animate-slide-down">
       {/* Header */}
-      <div
-        className={`flex items-center justify-between px-4 py-3 ${headerStyle.bgColor} ${headerStyle.textColor}`}
-      >
-        <div className="flex items-center gap-2">
-          {headerStyle.icon}
-          <h2 className="font-semibold">{headerStyle.title}</h2>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border">
+        <div className="flex items-center gap-3">
+          {/* Colored accent dot */}
+          <div className={`w-2.5 h-2.5 rounded-full ${headerStyle.accentColor}`} />
+          <div className="flex items-center gap-2">
+            <span className={headerStyle.textColor}>{headerStyle.icon}</span>
+            <h2 className="font-semibold text-content-primary">{headerStyle.title}</h2>
+          </div>
         </div>
         <button
           onClick={() => selectNode(null)}
-          className="p-1 hover:bg-white/20 rounded-md transition-colors"
-          title="Close panel"
+          className="p-1.5 text-content-subtle hover:text-content-primary hover:bg-surface-highlight rounded-lg transition-colors"
+          title="Close panel (Esc)"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
       </div>
 

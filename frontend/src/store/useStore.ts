@@ -162,7 +162,13 @@ interface ScenarioSnapshot {
   result: SimulationResult;
 }
 
+// Theme type
+type Theme = "light" | "dark";
+
 interface PlantState {
+  // UI state
+  theme: Theme;
+
   // React Flow state
   nodes: Node<EquipmentNodeData>[];
   edges: Edge[];
@@ -229,11 +235,26 @@ interface PlantState {
   addNode: (type: EquipmentType, position: { x: number; y: number }) => string;
   deleteNode: (nodeId: string) => void;
   addEdge: (sourceId: string, targetId: string, sourceHandle: string, targetHandle: string) => void;
+
+  // UI actions
+  setTheme: (theme: Theme) => void;
 }
+
+// Get initial theme from localStorage or default to light
+const getInitialTheme = (): Theme => {
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("sludgesim-theme");
+    if (stored === "dark" || stored === "light") {
+      return stored;
+    }
+  }
+  return "light";
+};
 
 export const useStore = create<PlantState>()(
   immer((set) => ({
     // Initial state
+    theme: getInitialTheme(),
     nodes: createDefaultNodes(),
     edges: createDefaultEdges(),
     selectedNodeId: null,
@@ -776,10 +797,24 @@ export const useStore = create<PlantState>()(
         state.edges.push(newEdge);
         state.simulationResult = null; // Clear simulation when topology changes
       }),
+
+    // Set theme and persist to localStorage
+    setTheme: (theme) =>
+      set((state) => {
+        state.theme = theme;
+        localStorage.setItem("sludgesim-theme", theme);
+        // Apply/remove dark class on document
+        if (theme === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      }),
   }))
 );
 
 // Selector hooks for common state slices
+export const useTheme = () => useStore((state) => state.theme);
 export const useNodes = () => useStore((state) => state.nodes);
 export const useEdges = () => useStore((state) => state.edges);
 export const useSelectedNodeId = () => useStore((state) => state.selectedNodeId);

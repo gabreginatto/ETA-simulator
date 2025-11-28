@@ -1,5 +1,6 @@
 /**
  * Load Project Modal - allows loading a saved project or deleting projects.
+ * Dark glass morphism design.
  */
 import { useState } from "react";
 import { X, FolderOpen, Trash2, AlertTriangle } from "lucide-react";
@@ -48,18 +49,18 @@ export function LoadProjectModal({ isOpen, onClose, onLoaded }: LoadProjectModal
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-surface-overlay" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+      <div className="relative glass rounded-2xl shadow-float w-full max-w-2xl max-h-[80vh] flex flex-col animate-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-800">Load Project</h2>
+        <div className="flex items-center justify-between p-6 border-b border-glass-border">
+          <h2 className="text-lg font-semibold text-content-primary">Load Project</h2>
           <button
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+            className="p-1.5 text-content-subtle hover:text-content-primary hover:bg-surface-highlight rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -69,20 +70,20 @@ export function LoadProjectModal({ isOpen, onClose, onLoaded }: LoadProjectModal
         <div className="flex-1 overflow-y-auto p-6">
           {isLoading && (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
             </div>
           )}
 
           {error && (
-            <div className="text-center py-12 text-red-600">
+            <div className="text-center py-12 text-status-error">
               Error loading projects: {error.message}
             </div>
           )}
 
           {data && data.items.length === 0 && (
-            <div className="text-center py-12 text-slate-500">
+            <div className="text-center py-12 text-content-subtle">
               <FolderOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No saved projects yet.</p>
+              <p className="text-content-secondary">No saved projects yet.</p>
               <p className="text-sm mt-2">Save your current configuration to get started.</p>
             </div>
           )}
@@ -92,16 +93,16 @@ export function LoadProjectModal({ isOpen, onClose, onLoaded }: LoadProjectModal
               {data.items.map((project) => (
                 <div
                   key={project.id}
-                  className={`border rounded-lg p-4 transition-colors ${
+                  className={`border rounded-xl p-4 transition-colors ${
                     currentProject?.id === project.id
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-slate-200 hover:border-slate-300 bg-white"
+                      ? "border-primary-500 bg-primary-500/10"
+                      : "border-glass-border bg-surface-elevated hover:border-content-subtle"
                   }`}
                 >
                   {deleteConfirmId === project.id ? (
                     // Delete confirmation
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 text-amber-600">
+                      <div className="flex items-center gap-3 text-status-warning">
                         <AlertTriangle className="w-5 h-5" />
                         <span className="text-sm font-medium">
                           Delete "{project.name}"?
@@ -110,14 +111,14 @@ export function LoadProjectModal({ isOpen, onClose, onLoaded }: LoadProjectModal
                       <div className="flex gap-2">
                         <button
                           onClick={() => setDeleteConfirmId(null)}
-                          className="px-3 py-1 text-sm text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                          className="px-3 py-1 text-sm text-content-secondary hover:bg-surface-highlight rounded-lg transition-colors"
                         >
                           Cancel
                         </button>
                         <button
                           onClick={() => handleDelete(project.id)}
                           disabled={deleteProjectMutation.isPending}
-                          className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50"
+                          className="px-3 py-1 text-sm bg-status-error text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
                         >
                           {deleteProjectMutation.isPending ? "Deleting..." : "Delete"}
                         </button>
@@ -131,21 +132,21 @@ export function LoadProjectModal({ isOpen, onClose, onLoaded }: LoadProjectModal
                         onClick={() => handleLoad(project)}
                       >
                         <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-slate-800">
+                          <h3 className="font-medium text-content-primary">
                             {project.name}
                           </h3>
                           {currentProject?.id === project.id && (
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                            <span className="text-xs bg-primary-500/20 text-primary-400 px-2 py-0.5 rounded-full">
                               Current
                             </span>
                           )}
                         </div>
                         {project.description && (
-                          <p className="text-sm text-slate-500 mt-1">
+                          <p className="text-sm text-content-secondary mt-1">
                             {project.description}
                           </p>
                         )}
-                        <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
+                        <div className="flex items-center gap-4 mt-2 text-xs text-content-subtle font-mono">
                           <span>Updated: {formatDate(project.updated_at)}</span>
                           <span>
                             Flow: {project.plant_configuration.feed_source.parameters.flow_m3_h} m³/h
@@ -154,7 +155,7 @@ export function LoadProjectModal({ isOpen, onClose, onLoaded }: LoadProjectModal
                       </div>
                       <button
                         onClick={() => setDeleteConfirmId(project.id)}
-                        className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                        className="p-2 text-content-subtle hover:text-status-error transition-colors"
                         title="Delete project"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -168,10 +169,10 @@ export function LoadProjectModal({ isOpen, onClose, onLoaded }: LoadProjectModal
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end p-6 border-t border-slate-200">
+        <div className="flex justify-end p-6 border-t border-glass-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+            className="px-4 py-2 text-sm text-content-secondary hover:bg-surface-highlight rounded-lg transition-colors"
           >
             Close
           </button>

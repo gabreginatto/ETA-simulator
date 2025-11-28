@@ -1,10 +1,11 @@
 /**
  * Settings Modal - allows configuring polymer price, currency, operating hours,
  * and TCO (Total Cost of Ownership) parameters.
+ * Dark glass morphism design.
  */
 import { useState, useEffect } from "react";
-import { X, Settings, Download, ChevronDown, ChevronRight, Info } from "lucide-react";
-import { useStore } from "../../store/useStore";
+import { X, Settings, Download, ChevronDown, ChevronRight, Info, Sun, Moon } from "lucide-react";
+import { useStore, useTheme } from "../../store/useStore";
 import { Tooltip } from "../ui/Tooltip";
 import type { PlantSettings } from "../../types";
 
@@ -32,19 +33,19 @@ function CollapsibleSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border border-slate-200 rounded-md overflow-hidden">
+    <div className="border border-glass-border rounded-xl overflow-hidden bg-surface-elevated">
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 hover:bg-slate-100 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2 bg-surface-highlight/50 hover:bg-surface-highlight transition-colors"
       >
-        <span className="text-sm font-medium text-slate-700">{title}</span>
+        <span className="text-sm font-medium text-content-primary">{title}</span>
         {isOpen ? (
-          <ChevronDown className="w-4 h-4 text-slate-500" />
+          <ChevronDown className="w-4 h-4 text-content-subtle" />
         ) : (
-          <ChevronRight className="w-4 h-4 text-slate-500" />
+          <ChevronRight className="w-4 h-4 text-content-subtle" />
         )}
       </button>
-      {isOpen && <div className="p-3 space-y-3 border-t border-slate-200">{children}</div>}
+      {isOpen && <div className="p-3 space-y-3 border-t border-glass-border">{children}</div>}
     </div>
   );
 }
@@ -73,26 +74,26 @@ function NumberInput({
 }) {
   return (
     <div>
-      <label className="flex items-center gap-1 text-xs font-medium text-slate-600 mb-1">
+      <label className="flex items-center gap-1 text-xs font-semibold text-content-subtle uppercase tracking-wider mb-1">
         <span>{label}</span>
         {tooltip && (
           <Tooltip content={tooltip} position="top">
-            <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
+            <Info className="w-3.5 h-3.5 text-content-subtle cursor-help" />
           </Tooltip>
         )}
       </label>
       <div className="flex items-center gap-2">
-        {prefix && <span className="text-slate-500 text-sm">{prefix}</span>}
+        {prefix && <span className="text-content-subtle text-sm">{prefix}</span>}
         <input
           type="number"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           step={step}
           min={min}
-          className="flex-1 px-2 py-1.5 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="flex-1 px-2 py-1.5 text-sm bg-surface-canvas border border-glass-border rounded-lg text-content-primary placeholder-content-subtle focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500"
           placeholder={placeholder}
         />
-        {unit && <span className="text-slate-500 text-sm">{unit}</span>}
+        {unit && <span className="text-content-subtle text-sm">{unit}</span>}
       </div>
     </div>
   );
@@ -103,6 +104,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const setPlantConfiguration = useStore((state) => state.setPlantConfiguration);
   const simulationResult = useStore((state) => state.simulationResult);
   const currentProject = useStore((state) => state.currentProject);
+  const theme = useTheme();
+  const setTheme = useStore((state) => state.setTheme);
 
   // Basic settings
   const [polymerPrice, setPolymerPrice] = useState<string>("");
@@ -302,21 +305,21 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const currencySymbol = CURRENCIES.find((c) => c.code === currency)?.symbol || "$";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-surface-overlay" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="relative glass rounded-2xl shadow-float w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+        <div className="flex items-center justify-between p-4 border-b border-glass-border">
           <div className="flex items-center gap-2">
-            <Settings className="w-5 h-5 text-slate-600" />
-            <h2 className="text-lg font-semibold text-slate-800">Settings & TCO Parameters</h2>
+            <Settings className="w-5 h-5 text-content-accent" />
+            <h2 className="text-lg font-semibold text-content-primary">Settings & TCO Parameters</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+            className="p-1.5 text-content-subtle hover:text-content-primary hover:bg-surface-highlight rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -324,6 +327,42 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {/* Theme Toggle */}
+          <div className="flex items-center justify-between p-3 border border-glass-border rounded-xl bg-surface-elevated">
+            <div className="flex items-center gap-2">
+              {theme === "dark" ? (
+                <Moon className="w-4 h-4 text-content-accent" />
+              ) : (
+                <Sun className="w-4 h-4 text-amber-500" />
+              )}
+              <span className="text-sm font-medium text-content-primary">Theme</span>
+            </div>
+            <div className="flex items-center gap-1 p-0.5 bg-surface-canvas rounded-lg">
+              <button
+                onClick={() => setTheme("light")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  theme === "light"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-content-subtle hover:text-content-secondary"
+                }`}
+              >
+                <Sun className="w-3.5 h-3.5" />
+                Light
+              </button>
+              <button
+                onClick={() => setTheme("dark")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  theme === "dark"
+                    ? "bg-slate-700 text-white shadow-sm"
+                    : "text-content-subtle hover:text-content-secondary"
+                }`}
+              >
+                <Moon className="w-3.5 h-3.5" />
+                Dark
+              </button>
+            </div>
+          </div>
+
           {/* Basic Settings */}
           <CollapsibleSection
             title="Basic Settings"
@@ -332,11 +371,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           >
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Currency</label>
+                <label className="block text-xs font-semibold text-content-subtle uppercase tracking-wider mb-1">Currency</label>
                 <select
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value)}
-                  className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-2 py-1.5 text-sm bg-surface-canvas border border-glass-border rounded-lg text-content-primary focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500"
                 >
                   {CURRENCIES.map((c) => (
                     <option key={c.code} value={c.code}>
@@ -511,30 +550,30 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </CollapsibleSection>
 
           {/* Export Section */}
-          <div className="pt-3 border-t border-slate-200">
-            <h3 className="text-sm font-medium text-slate-700 mb-3">Export Data</h3>
+          <div className="pt-3 border-t border-glass-border">
+            <h3 className="text-xs font-semibold text-content-subtle uppercase tracking-wider mb-3">Export Data</h3>
             <div className="space-y-2">
               <div className="flex gap-2">
                 <button
                   onClick={() => handleExportResults("json")}
                   disabled={!simulationResult}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm border border-glass-border rounded-lg text-content-secondary hover:bg-surface-highlight disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Download className="w-4 h-4" />
-                  Results (JSON – TCO)
+                  Results (JSON)
                 </button>
                 <button
                   onClick={() => handleExportResults("csv")}
                   disabled={!simulationResult}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm border border-glass-border rounded-lg text-content-secondary hover:bg-surface-highlight disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Download className="w-4 h-4" />
-                  Results (CSV – TCO)
+                  Results (CSV)
                 </button>
               </div>
               <button
                 onClick={handleExportProject}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm border border-glass-border rounded-lg text-content-secondary hover:bg-surface-highlight transition-colors"
               >
                 <Download className="w-4 h-4" />
                 Export Project (JSON)
@@ -544,16 +583,16 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </div>
 
         {/* Footer Actions */}
-        <div className="flex justify-end gap-3 p-4 border-t border-slate-200">
+        <div className="flex justify-end gap-3 p-4 border-t border-glass-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+            className="px-4 py-2 text-sm text-content-secondary hover:bg-surface-highlight rounded-lg transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            className="px-4 py-2 text-sm text-white bg-primary-500 hover:bg-primary-400 rounded-lg transition-colors"
           >
             Save Settings
           </button>

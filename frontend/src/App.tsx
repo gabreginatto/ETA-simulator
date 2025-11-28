@@ -1,12 +1,21 @@
 /**
- * Main App component - SludgeSim application layout.
+ * Main App component - SludgeSim application with layered floating UI.
+ *
+ * Layout Structure:
+ * - Layer 0: Canvas (full screen, interactive)
+ * - Layer 1: UI Overlay (pointer-events-none container)
+ *   - Top: Floating header pill
+ *   - Right: Properties panel
+ *   - Bottom-left: Results panel (bottom sheet)
+ *   - Bottom-center: Equipment dock + Simulate button
  */
 import { useEffect, useState, useCallback } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactFlowProvider } from "@xyflow/react";
-import { Droplets, Save, FolderOpen, Settings, RotateCcw, Keyboard, HelpCircle } from "lucide-react";
+import { Droplets, Save, FolderOpen, Settings, RotateCcw, HelpCircle } from "lucide-react";
 
 import { FlowCanvas } from "./components/canvas/FlowCanvas";
+import { EquipmentDock } from "./components/canvas/EquipmentDock";
 import { PropertiesPanel } from "./components/panels/PropertiesPanel";
 import { ResultsPanel } from "./components/panels/ResultsPanel";
 import { SimulateButton } from "./components/SimulateButton";
@@ -16,7 +25,7 @@ import { ValidationBanner } from "./components/ui/ValidationBanner";
 import { SaveProjectModal } from "./components/modals/SaveProjectModal";
 import { LoadProjectModal } from "./components/modals/LoadProjectModal";
 import { SettingsModal } from "./components/modals/SettingsModal";
-import { useStore } from "./store/useStore";
+import { useStore, useTheme } from "./store/useStore";
 import { useJarTests } from "./hooks/useJarTests";
 import { useToast } from "./hooks/useToast";
 import { useValidation } from "./hooks/useValidation";
@@ -28,7 +37,7 @@ const DRAFT_STORAGE_KEY = "sludgesim-draft";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
       retry: 1,
     },
   },
@@ -41,7 +50,17 @@ function AppContent() {
   const resetToDefault = useStore((state) => state.resetToDefault);
   const initializeDefaultPlant = useStore((state) => state.initializeDefaultPlant);
   const selectNode = useStore((state) => state.selectNode);
+  const theme = useTheme();
   const toast = useToast();
+
+  // Apply theme class to document on mount and when theme changes
+  useEffect(() => {
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [theme]);
 
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -70,7 +89,7 @@ function AppContent() {
     }
   }, []);
 
-  // Save draft to localStorage when configuration changes (and no project loaded)
+  // Save draft to localStorage when configuration changes
   useEffect(() => {
     if (!currentProject) {
       localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(plantConfiguration));
@@ -97,42 +116,31 @@ function AppContent() {
   // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts when typing in inputs
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
 
-      // Ctrl/Cmd + S - Save
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         setShowSaveModal(true);
       }
 
-      // Ctrl/Cmd + O - Open/Load
       if ((e.ctrlKey || e.metaKey) && e.key === "o") {
         e.preventDefault();
         setShowLoadModal(true);
       }
 
-      // ? - Show keyboard shortcuts
       if (e.key === "?" || (e.shiftKey && e.key === "/")) {
         e.preventDefault();
         setShowShortcuts(true);
       }
 
-      // Escape - Close modal or deselect node
       if (e.key === "Escape") {
-        if (showShortcuts) {
-          setShowShortcuts(false);
-        } else if (showSaveModal) {
-          setShowSaveModal(false);
-        } else if (showLoadModal) {
-          setShowLoadModal(false);
-        } else if (showSettings) {
-          setShowSettings(false);
-        } else {
-          selectNode(null);
-        }
+        if (showShortcuts) setShowShortcuts(false);
+        else if (showSaveModal) setShowSaveModal(false);
+        else if (showLoadModal) setShowLoadModal(false);
+        else if (showSettings) setShowSettings(false);
+        else selectNode(null);
       }
     };
 
@@ -146,138 +154,125 @@ function AppContent() {
     toast.info("Reset", "Plant configuration reset to defaults");
   };
 
-  const handleSaved = () => {
-    toast.success("Saved", "Project saved successfully");
-  };
-
-  const handleLoaded = () => {
-    toast.success("Loaded", "Project loaded successfully");
-  };
+  const handleSaved = () => toast.success("Saved", "Project saved successfully");
+  const handleLoaded = () => toast.success("Loaded", "Project loaded successfully");
 
   return (
-    <div className="h-screen flex flex-col bg-slate-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-slate-200 px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
-              <Droplets className="w-6 h-6 text-white" />
+    <div className="relative h-screen w-screen overflow-hidden bg-surface-canvas font-sans text-content-primary">
+      {/* LAYER 0: Interactive Canvas */}
+      <div className="absolute inset-0 z-0">
+        <ReactFlowProvider>
+          <FlowCanvas />
+        </ReactFlowProvider>
+      </div>
+
+      {/* LAYER 1: UI Overlay (Pass-through clicks) */}
+      <div className="absolute inset-0 z-10 pointer-events-none flex flex-col p-4 md:p-6">
+
+        {/* Top Region: Header */}
+        <div className="flex justify-center">
+          <header className="pointer-events-auto glass rounded-2xl px-4 py-2.5 flex items-center gap-4 shadow-float animate-slide-down">
+            {/* Logo */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 bg-gradient-to-br from-cyan-400 to-primary-500 rounded-xl flex items-center justify-center shadow-glow-cyan">
+                <Droplets className="w-5 h-5 text-white" />
+              </div>
+              <div className="hidden sm:block">
+                <h1 className="text-sm font-semibold text-content-primary leading-tight">SludgeSim</h1>
+                <p className="text-2xs text-content-subtle">
+                  {currentProject ? currentProject.name : "New Simulation"}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-800">SludgeSim</h1>
-              <p className="text-xs text-slate-500">
-                {currentProject ? currentProject.name : "New Simulation"}
-              </p>
+
+            {/* Divider */}
+            <div className="w-px h-6 bg-glass-border" />
+
+            {/* Actions */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleReset}
+                className="p-2 text-content-secondary hover:text-content-primary hover:bg-surface-highlight rounded-lg transition-all"
+                title="Reset to defaults"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleOpenSave}
+                className="p-2 text-content-secondary hover:text-content-primary hover:bg-surface-highlight rounded-lg transition-all"
+                title="Save project (⌘S)"
+              >
+                <Save className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleOpenLoad}
+                className="p-2 text-content-secondary hover:text-content-primary hover:bg-surface-highlight rounded-lg transition-all"
+                title="Load project (⌘O)"
+              >
+                <FolderOpen className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleShowShortcuts}
+                className="p-2 text-content-secondary hover:text-content-primary hover:bg-surface-highlight rounded-lg transition-all"
+                title="Keyboard shortcuts (?)"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleOpenSettings}
+                className="p-2 text-content-secondary hover:text-content-primary hover:bg-surface-highlight rounded-lg transition-all"
+                title="Settings"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
             </div>
-          </div>
+          </header>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleReset}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-            title="Reset to defaults"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Reset
-          </button>
-          <button
-            onClick={handleOpenSave}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-            title="Save project (Ctrl+S)"
-          >
-            <Save className="w-4 h-4" />
-            Save
-          </button>
-          <button
-            onClick={handleOpenLoad}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-            title="Load project (Ctrl+O)"
-          >
-            <FolderOpen className="w-4 h-4" />
-            Load
-          </button>
-          <button
-            onClick={handleShowShortcuts}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-            title="Keyboard shortcuts (?)"
-          >
-            <HelpCircle className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleOpenSettings}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-            title="Settings"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Canvas Area */}
-        <div className="flex-1 flex flex-col">
-          {/* Validation Banner */}
-          <div className="px-4 pt-2">
+        {/* Middle Region: Side Panels */}
+        <div className="flex-1 flex relative mt-4">
+          {/* Validation Banner - top left */}
+          <div className="absolute top-0 left-0 pointer-events-auto max-w-md">
             <ValidationBanner />
           </div>
 
-          {/* Canvas */}
-          <div className="flex-1 relative">
-            <ReactFlowProvider>
-              <FlowCanvas />
-            </ReactFlowProvider>
-
-            {/* Simulate Button - floating */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
-              <SimulateButton />
-            </div>
+          {/* Results Panel - Bottom Left */}
+          <div className="absolute bottom-0 left-0 pointer-events-auto">
+            <ResultsPanel />
           </div>
 
-          {/* Results Panel */}
-          <ResultsPanel />
+          {/* Properties Panel - Right Side */}
+          <div className="absolute right-0 top-0 bottom-16 pointer-events-auto">
+            <PropertiesPanel />
+          </div>
         </div>
 
-        {/* Properties Panel */}
-        <PropertiesPanel />
+        {/* Bottom Region: Dock + Simulate */}
+        <div className="flex justify-center items-end gap-4 pb-2">
+          <div className="pointer-events-auto">
+            <EquipmentDock />
+          </div>
+          <div className="pointer-events-auto">
+            <SimulateButton />
+          </div>
+        </div>
       </div>
 
       {/* Loading indicator for jar tests */}
       {jarTestsLoading && (
-        <div className="fixed bottom-4 left-4 bg-white px-3 py-2 rounded-md shadow-md text-sm text-slate-600">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 glass px-4 py-2 rounded-full text-sm text-content-secondary animate-fade-in">
           Loading jar tests...
         </div>
       )}
-
-      {/* Keyboard shortcuts hint */}
-      <div className="fixed bottom-4 left-4 flex items-center gap-1 text-xs text-slate-400">
-        <Keyboard className="w-3 h-3" />
-        <span>Ctrl+Enter to simulate</span>
-      </div>
 
       {/* Toast notifications */}
       <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
 
       {/* Modals */}
-      <KeyboardShortcutsModal
-        isOpen={showShortcuts}
-        onClose={handleHideShortcuts}
-      />
-      <SaveProjectModal
-        isOpen={showSaveModal}
-        onClose={handleCloseSave}
-        onSaved={handleSaved}
-      />
-      <LoadProjectModal
-        isOpen={showLoadModal}
-        onClose={handleCloseLoad}
-        onLoaded={handleLoaded}
-      />
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={handleCloseSettings}
-      />
+      <KeyboardShortcutsModal isOpen={showShortcuts} onClose={handleHideShortcuts} />
+      <SaveProjectModal isOpen={showSaveModal} onClose={handleCloseSave} onSaved={handleSaved} />
+      <LoadProjectModal isOpen={showLoadModal} onClose={handleCloseLoad} onLoaded={handleLoaded} />
+      <SettingsModal isOpen={showSettings} onClose={handleCloseSettings} />
     </div>
   );
 }

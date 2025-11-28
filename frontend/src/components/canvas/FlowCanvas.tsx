@@ -18,7 +18,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { useStore } from "../../store/useStore";
+import { useStore, useTheme } from "../../store/useStore";
 import { FeedNode } from "./nodes/FeedNode";
 import { PumpNode } from "./nodes/PumpNode";
 import { PolymerNode } from "./nodes/PolymerNode";
@@ -26,7 +26,6 @@ import { DewateringNode } from "./nodes/DewateringNode";
 import { ClarifierNode } from "./nodes/ClarifierNode";
 import { ThickenerNode } from "./nodes/ThickenerNode";
 import { StreamEdge } from "./edges/StreamEdge";
-import { EquipmentToolbar } from "./EquipmentToolbar";
 import {
   getPortType,
   isConnectionValid,
@@ -62,6 +61,12 @@ function FlowCanvasInner() {
   const addEdge = useStore((state) => state.addEdge);
   const deleteNode = useStore((state) => state.deleteNode);
   const selectedNodeId = useStore((state) => state.selectedNodeId);
+  const theme = useTheme();
+
+  // Theme-aware dot color - very subtle in both modes
+  const dotColor = theme === "dark"
+    ? "rgba(148, 163, 184, 0.015)"  // Nearly invisible in dark mode
+    : "rgba(15, 23, 42, 0.04)";      // Very subtle in light mode
 
   // Handle node selection
   // Note: We only update selection when a node IS selected, not when all nodes are deselected.
@@ -190,7 +195,6 @@ function FlowCanvasInner() {
       onKeyDown={onKeyDown}
       tabIndex={0}
     >
-      <EquipmentToolbar />
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -228,7 +232,7 @@ function FlowCanvasInner() {
           variant={BackgroundVariant.Dots}
           gap={20}
           size={1}
-          color="#e2e8f0"
+          color={dotColor}
         />
         <Controls
           showZoom={true}

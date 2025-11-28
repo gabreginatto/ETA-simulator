@@ -14,12 +14,13 @@ function ClarifierNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div
-      className={`
-        w-44 bg-gradient-to-br from-blue-50 to-sky-100
-        rounded-lg shadow-md border-2 transition-all duration-200 relative overflow-visible
-        ${selected ? "border-blue-500 shadow-lg shadow-blue-200" : "border-blue-200"}
-        hover:shadow-lg hover:border-blue-400
-      `}
+      className="w-44 rounded-lg shadow-md border-2 transition-all duration-200 relative overflow-visible hover:shadow-lg"
+      style={{
+        background: "var(--node-clarifier-bg)",
+        borderColor: selected
+          ? "var(--node-clarifier-accent)"
+          : "var(--node-clarifier-border)",
+      }}
     >
       <NodeDeleteButton nodeId={id} nodeLabel="Clarifier" />
 
@@ -28,45 +29,63 @@ function ClarifierNodeComponent({ id, data, selected }: NodeProps) {
         type="target"
         position={Position.Left}
         id="input"
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white"
+        className="!w-3 !h-3 !border-2"
+        style={{
+          backgroundColor: "var(--node-clarifier-accent)",
+          borderColor: "var(--rf-handle-border)",
+        }}
       />
 
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-blue-200 bg-blue-500/10 rounded-t-lg">
-        <Layers className="w-5 h-5 text-blue-600" />
-        <span className="text-sm font-semibold text-blue-800">Clarifier</span>
+      <div
+        className="flex items-center gap-2 px-3 py-2 border-b rounded-t-lg"
+        style={{
+          backgroundColor: "var(--node-clarifier-header)",
+          borderColor: "var(--node-divider)",
+        }}
+      >
+        <Layers className="w-5 h-5" style={{ color: "var(--node-clarifier-accent)" }} />
+        <span className="text-sm font-semibold" style={{ color: "var(--node-clarifier-text)" }}>
+          Clarifier
+        </span>
       </div>
 
       {/* Content */}
       <div className="px-3 py-2 space-y-1">
         <div className="flex justify-between items-center">
-          <span className="text-xs text-gray-500">Underflow</span>
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-xs" style={{ color: "var(--node-text-secondary)" }}>
+            Underflow
+          </span>
+          <span className="text-sm font-medium" style={{ color: "var(--node-text-primary)" }}>
             {parameters.underflow_rate_m3_h.toFixed(1)} m³/h
           </span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="text-xs text-gray-500">Capture</span>
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-xs" style={{ color: "var(--node-text-secondary)" }}>
+            Capture
+          </span>
+          <span className="text-sm font-medium" style={{ color: "var(--node-text-primary)" }}>
             {((parameters.capture_rate ?? 0.98) * 100).toFixed(0)}%
           </span>
         </div>
 
         {/* Output streams info */}
         {(overflowStreamData || underflowStreamData) && (
-          <div className="pt-1 border-t border-blue-100 space-y-1">
+          <div className="pt-1 border-t space-y-1" style={{ borderColor: "var(--node-divider)" }}>
             {overflowStreamData && (
               <div className="flex justify-between items-center">
                 <span className="text-xs text-sky-600">Overflow</span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs" style={{ color: "var(--node-text-muted)" }}>
                   {overflowStreamData.volumetric_flow_m3_h.toFixed(1)} m³/h
                 </span>
               </div>
             )}
             {underflowStreamData && (
               <div className="flex justify-between items-center">
-                <span className="text-xs text-blue-700">Underflow</span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs" style={{ color: "var(--node-clarifier-text)" }}>
+                  Underflow
+                </span>
+                <span className="text-xs" style={{ color: "var(--node-text-muted)" }}>
                   {underflowStreamData.dry_solids_percent.toFixed(1)}% DS
                 </span>
               </div>
@@ -80,15 +99,22 @@ function ClarifierNodeComponent({ id, data, selected }: NodeProps) {
         type="source"
         position={Position.Right}
         id="overflow"
-        className="!w-3 !h-3 !bg-sky-500 !border-2 !border-white"
-        style={{ top: '30%' }}
+        className="!w-3 !h-3 !bg-sky-500 !border-2"
+        style={{
+          top: '30%',
+          borderColor: "var(--rf-handle-border)",
+        }}
       />
       <Handle
         type="source"
         position={Position.Right}
         id="underflow"
-        className="!w-3 !h-3 !bg-blue-600 !border-2 !border-white"
-        style={{ top: '70%' }}
+        className="!w-3 !h-3 !border-2"
+        style={{
+          top: '70%',
+          backgroundColor: "var(--node-clarifier-accent)",
+          borderColor: "var(--rf-handle-border)",
+        }}
       />
     </div>
   );
