@@ -12,7 +12,14 @@ import type {
   DewateringNodeData,
   ClarifierNodeData,
   ThickenerNodeData,
+  CoagulantNodeData,
+  FlocculatorNodeData,
+  SedimentationNodeData,
+  DAFNodeData,
+  FilterNodeData,
+  ClearwellNodeData,
   PlantConfiguration,
+  PlantProfile,
   Project,
   SimulationResult,
   JarTest,
@@ -22,11 +29,18 @@ import type {
   DewateringUnitParams,
   ClarifierParams,
   ThickenerParams,
+  CoagulantParams,
+  FlocculatorParams,
+  SedimentationParams,
+  DAFParams,
+  FilterParams,
+  ClearwellParams,
   GraphNode,
   GraphEdge,
   EquipmentType,
 } from "../types";
 import type { ValidationError } from "../api/client";
+import { getProfilePreset } from "../config/profilePresets";
 
 // Re-export ValidationError type for convenience
 export type { ValidationError };
@@ -208,7 +222,20 @@ interface PlantState {
   onEdgesChange: (changes: EdgeChange[]) => void;
   updateNodeParameters: (
     nodeId: string,
-    params: Partial<FeedSourceParams | PumpParams | PolymerConditionerParams | DewateringUnitParams | ClarifierParams | ThickenerParams>
+    params: Partial<
+      | FeedSourceParams
+      | PumpParams
+      | PolymerConditionerParams
+      | DewateringUnitParams
+      | ClarifierParams
+      | ThickenerParams
+      | CoagulantParams
+      | FlocculatorParams
+      | SedimentationParams
+      | DAFParams
+      | FilterParams
+      | ClearwellParams
+    >
   ) => void;
   selectNode: (nodeId: string | null) => void;
   setPlantConfiguration: (config: PlantConfiguration) => void;
@@ -238,6 +265,9 @@ interface PlantState {
 
   // UI actions
   setTheme: (theme: Theme) => void;
+
+  // Profile actions
+  switchProfile: (profile: PlantProfile) => void;
 }
 
 // Get initial theme from localStorage or default to light
@@ -373,6 +403,30 @@ export const useStore = create<PlantState>()(
             ...params,
           } as ThickenerParams;
           (node.data as ThickenerNodeData).parameters = updatedParams;
+        } else if (node.data.type === "coagulant") {
+          const currentParams = (node.data as CoagulantNodeData).parameters;
+          const updatedParams = { ...currentParams, ...params } as CoagulantParams;
+          (node.data as CoagulantNodeData).parameters = updatedParams;
+        } else if (node.data.type === "flocculator") {
+          const currentParams = (node.data as FlocculatorNodeData).parameters;
+          const updatedParams = { ...currentParams, ...params } as FlocculatorParams;
+          (node.data as FlocculatorNodeData).parameters = updatedParams;
+        } else if (node.data.type === "sedimentation") {
+          const currentParams = (node.data as SedimentationNodeData).parameters;
+          const updatedParams = { ...currentParams, ...params } as SedimentationParams;
+          (node.data as SedimentationNodeData).parameters = updatedParams;
+        } else if (node.data.type === "daf") {
+          const currentParams = (node.data as DAFNodeData).parameters;
+          const updatedParams = { ...currentParams, ...params } as DAFParams;
+          (node.data as DAFNodeData).parameters = updatedParams;
+        } else if (node.data.type === "filter") {
+          const currentParams = (node.data as FilterNodeData).parameters;
+          const updatedParams = { ...currentParams, ...params } as FilterParams;
+          (node.data as FilterNodeData).parameters = updatedParams;
+        } else if (node.data.type === "clearwell") {
+          const currentParams = (node.data as ClearwellNodeData).parameters;
+          const updatedParams = { ...currentParams, ...params } as ClearwellParams;
+          (node.data as ClearwellNodeData).parameters = updatedParams;
         }
 
         // Clear simulation result when parameters change
@@ -726,6 +780,70 @@ export const useStore = create<PlantState>()(
               },
             } as DewateringNodeData;
             break;
+          // Drinking Water Treatment nodes
+          case "coagulant":
+            data = {
+              type: "coagulant",
+              label: "Coagulant",
+              parameters: {
+                dose_mg_L: 30.0,
+                coagulant_type: "alum",
+              },
+            } as CoagulantNodeData;
+            break;
+          case "flocculator":
+            data = {
+              type: "flocculator",
+              label: "Flocculator",
+              parameters: {
+                detention_time_min: 20.0,
+                g_value: 50.0,
+              },
+            } as FlocculatorNodeData;
+            break;
+          case "sedimentation":
+            data = {
+              type: "sedimentation",
+              label: "Sedimentation",
+              parameters: {
+                surface_loading_m3_m2_h: 2.5,
+                capture_rate: 0.90,
+              },
+            } as SedimentationNodeData;
+            break;
+          case "daf":
+            data = {
+              type: "daf",
+              label: "DAF",
+              parameters: {
+                air_to_solids_ratio: 0.02,
+                recycle_rate: 0.10,
+                capture_rate: 0.95,
+              },
+            } as DAFNodeData;
+            break;
+          case "filter":
+            data = {
+              type: "filter",
+              label: "Filter",
+              parameters: {
+                media_type: "dual_media",
+                run_length_h: 24.0,
+                loading_rate_m3_m2_h: 10.0,
+                capture_rate: 0.95,
+              },
+            } as FilterNodeData;
+            break;
+          case "clearwell":
+            data = {
+              type: "clearwell",
+              label: "Clearwell",
+              parameters: {
+                volume_m3: 500.0,
+                contact_time_min: 30.0,
+              },
+            } as ClearwellNodeData;
+            break;
           default:
             throw new Error(`Unknown equipment type: ${type}`);
         }
@@ -809,6 +927,30 @@ export const useStore = create<PlantState>()(
         } else {
           document.documentElement.classList.remove("dark");
         }
+      }),
+
+    // Switch plant profile (wastewater vs drinking_water)
+    switchProfile: (profile) =>
+      set((state) => {
+        const preset = getProfilePreset(profile);
+
+        // Reset to profile defaults
+        state.nodes = preset.defaultNodes;
+        state.edges = preset.defaultEdges;
+        state.plantConfiguration.settings = { ...preset.settings, plant_profile: profile };
+
+        // Clear simulation and selection
+        state.simulationResult = null;
+        state.selectedNodeId = null;
+        state.validationErrors = [];
+        state.validationWarnings = [];
+
+        // Clear project association (profile switch starts fresh)
+        state.currentProject = null;
+        state.selectedJarTestId = null;
+
+        // Persist profile choice
+        localStorage.setItem("sludgesim-profile", profile);
       }),
   }))
 );

@@ -147,6 +147,7 @@ export function ResultsPanel() {
   const hasAnyScenario = scenarioA !== null || scenarioB !== null;
 
   const currency = plantConfiguration.settings.currency || "BRL";
+  const plantProfile = plantConfiguration.settings.plant_profile || "wastewater";
 
   // Loading skeleton
   if (isSimulating) {
@@ -197,7 +198,7 @@ export function ResultsPanel() {
           {success ? "Mass Balance OK" : "Simulation Failed"}
         </span>
       </div>
-      {success && (
+      {success && plantProfile === "wastewater" && kpis.cake_dryness_percent !== undefined && (
         <>
           <div className="w-px h-5 bg-glass-border" />
           <span className="text-sm text-content-secondary font-mono">
@@ -205,6 +206,14 @@ export function ResultsPanel() {
           </span>
           <span className="text-sm text-content-secondary font-mono">
             {kpis.cake_tDS_per_day.toFixed(1)} tDS/day
+          </span>
+        </>
+      )}
+      {success && plantProfile === "drinking_water" && streams.feed && (
+        <>
+          <div className="w-px h-5 bg-glass-border" />
+          <span className="text-sm text-content-secondary font-mono">
+            {streams.feed.volumetric_flow_m3_h.toFixed(0)} m³/h
           </span>
         </>
       )}
@@ -279,7 +288,7 @@ export function ResultsPanel() {
         {/* Mass Balance Table */}
         <div>
           <h4 className="text-xs font-semibold text-content-subtle uppercase tracking-wider mb-2">
-            Mass Balance
+            {plantProfile === "drinking_water" ? "Treatment Streams" : "Mass Balance"}
           </h4>
           <div className="overflow-x-auto bg-surface-elevated rounded-lg border border-glass-border">
             <table className="w-full text-sm">
@@ -292,138 +301,232 @@ export function ResultsPanel() {
                     Flow
                   </th>
                   <th className="px-3 py-2 text-right font-medium text-content-subtle">
-                    DS
+                    {plantProfile === "drinking_water" ? "Turbidity" : "DS"}
                   </th>
                   <th className="px-3 py-2 text-right font-medium text-content-subtle">
                     Solids
                   </th>
-                  <th className="px-3 py-2 text-right font-medium text-content-subtle">
-                    Polymer
-                  </th>
+                  {plantProfile === "wastewater" && (
+                    <th className="px-3 py-2 text-right font-medium text-content-subtle">
+                      Polymer
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-glass-border font-mono text-xs">
-                <tr>
-                  <td className="px-3 py-2 text-viz-feed font-medium font-sans">Feed</td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.feed.volumetric_flow_m3_h.toFixed(1)} <span className="text-content-subtle">m³/h</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.feed.dry_solids_percent.toFixed(2)} <span className="text-content-subtle">%</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.feed.dry_solids_mass_flow_kg_h.toFixed(0)} <span className="text-content-subtle">kg/h</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-subtle">—</td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-viz-polymer font-medium font-sans">
-                    Conditioned
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.conditioned.volumetric_flow_m3_h.toFixed(1)} <span className="text-content-subtle">m³/h</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.conditioned.dry_solids_percent.toFixed(2)} <span className="text-content-subtle">%</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.conditioned.dry_solids_mass_flow_kg_h.toFixed(0)} <span className="text-content-subtle">kg/h</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.conditioned.polymer_dose_ppm.toFixed(1)} <span className="text-content-subtle">ppm</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-viz-cake font-medium font-sans">Cake</td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.cake.volumetric_flow_m3_h.toFixed(1)} <span className="text-content-subtle">m³/h</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary font-semibold">
-                    {streams.cake.dry_solids_percent.toFixed(2)} <span className="text-content-subtle">%</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.cake.dry_solids_mass_flow_kg_h.toFixed(0)} <span className="text-content-subtle">kg/h</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.cake.polymer_dose_ppm.toFixed(1)} <span className="text-content-subtle">ppm</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-viz-liquid font-medium font-sans">Liquid</td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.liquid.volumetric_flow_m3_h.toFixed(1)} <span className="text-content-subtle">m³/h</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.liquid.dry_solids_percent.toFixed(2)} <span className="text-content-subtle">%</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.liquid.dry_solids_mass_flow_kg_h.toFixed(0)} <span className="text-content-subtle">kg/h</span>
-                  </td>
-                  <td className="px-3 py-2 text-right text-content-primary">
-                    {streams.liquid.polymer_dose_ppm.toFixed(1)} <span className="text-content-subtle">ppm</span>
-                  </td>
-                </tr>
+                {/* Feed stream (always present) */}
+                {streams.feed && (
+                  <tr>
+                    <td className="px-3 py-2 text-viz-feed font-medium font-sans">Feed</td>
+                    <td className="px-3 py-2 text-right text-content-primary">
+                      {streams.feed.volumetric_flow_m3_h.toFixed(1)} <span className="text-content-subtle">m³/h</span>
+                    </td>
+                    <td className="px-3 py-2 text-right text-content-primary">
+                      {streams.feed.dry_solids_percent.toFixed(2)} <span className="text-content-subtle">%</span>
+                    </td>
+                    <td className="px-3 py-2 text-right text-content-primary">
+                      {streams.feed.dry_solids_mass_flow_kg_h.toFixed(0)} <span className="text-content-subtle">kg/h</span>
+                    </td>
+                    {plantProfile === "wastewater" && (
+                      <td className="px-3 py-2 text-right text-content-subtle">—</td>
+                    )}
+                  </tr>
+                )}
+
+                {/* Wastewater-specific streams */}
+                {plantProfile === "wastewater" && (
+                  <>
+                    {streams.conditioned && (
+                      <tr>
+                        <td className="px-3 py-2 text-viz-polymer font-medium font-sans">
+                          Conditioned
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.conditioned.volumetric_flow_m3_h.toFixed(1)} <span className="text-content-subtle">m³/h</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.conditioned.dry_solids_percent.toFixed(2)} <span className="text-content-subtle">%</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.conditioned.dry_solids_mass_flow_kg_h.toFixed(0)} <span className="text-content-subtle">kg/h</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.conditioned.polymer_dose_ppm.toFixed(1)} <span className="text-content-subtle">ppm</span>
+                        </td>
+                      </tr>
+                    )}
+                    {streams.cake && (
+                      <tr>
+                        <td className="px-3 py-2 text-viz-cake font-medium font-sans">Cake</td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.cake.volumetric_flow_m3_h.toFixed(1)} <span className="text-content-subtle">m³/h</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary font-semibold">
+                          {streams.cake.dry_solids_percent.toFixed(2)} <span className="text-content-subtle">%</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.cake.dry_solids_mass_flow_kg_h.toFixed(0)} <span className="text-content-subtle">kg/h</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.cake.polymer_dose_ppm.toFixed(1)} <span className="text-content-subtle">ppm</span>
+                        </td>
+                      </tr>
+                    )}
+                    {streams.liquid && (
+                      <tr>
+                        <td className="px-3 py-2 text-viz-liquid font-medium font-sans">Liquid</td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.liquid.volumetric_flow_m3_h.toFixed(1)} <span className="text-content-subtle">m³/h</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.liquid.dry_solids_percent.toFixed(2)} <span className="text-content-subtle">%</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.liquid.dry_solids_mass_flow_kg_h.toFixed(0)} <span className="text-content-subtle">kg/h</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.liquid.polymer_dose_ppm.toFixed(1)} <span className="text-content-subtle">ppm</span>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                )}
+
+                {/* Drinking water-specific streams */}
+                {plantProfile === "drinking_water" && (
+                  <>
+                    {streams.finished && (
+                      <tr>
+                        <td className="px-3 py-2 text-blue-500 font-medium font-sans">Finished Water</td>
+                        <td className="px-3 py-2 text-right text-content-primary font-semibold">
+                          {streams.finished.volumetric_flow_m3_h.toFixed(1)} <span className="text-content-subtle">m³/h</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.finished.dry_solids_percent ? (streams.finished.dry_solids_percent * 100).toFixed(1) : '—'} <span className="text-content-subtle">NTU</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.finished.dry_solids_mass_flow_kg_h ? streams.finished.dry_solids_mass_flow_kg_h.toFixed(1) : '—'} <span className="text-content-subtle">kg/h</span>
+                        </td>
+                      </tr>
+                    )}
+                    {streams.filtered && !streams.finished && (
+                      <tr>
+                        <td className="px-3 py-2 text-emerald-500 font-medium font-sans">Filtered Water</td>
+                        <td className="px-3 py-2 text-right text-content-primary font-semibold">
+                          {streams.filtered.volumetric_flow_m3_h.toFixed(1)} <span className="text-content-subtle">m³/h</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.filtered.dry_solids_percent ? (streams.filtered.dry_solids_percent * 100).toFixed(1) : '—'} <span className="text-content-subtle">NTU</span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-content-primary">
+                          {streams.filtered.dry_solids_mass_flow_kg_h ? streams.filtered.dry_solids_mass_flow_kg_h.toFixed(1) : '—'} <span className="text-content-subtle">kg/h</span>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {/* Polymer KPIs */}
-          <div className="p-3 bg-surface-elevated rounded-lg border border-glass-border">
-            <h5 className="text-xs font-medium text-viz-polymer mb-1">
-              Effective Dose
-            </h5>
-            <p className="text-lg font-bold font-mono text-content-primary">
-              {kpis.polymer_dose_ppm.toFixed(1)}
-              <span className="text-sm font-normal ml-1 text-content-subtle">ppm</span>
-            </p>
-          </div>
-          <div className="p-3 bg-surface-elevated rounded-lg border border-glass-border">
-            <h5 className="text-xs font-medium text-viz-polymer mb-1">
-              Consumption
-            </h5>
-            <p className="text-lg font-bold font-mono text-content-primary">
-              {kpis.polymer_kg_per_tDS.toFixed(2)}
-              <span className="text-sm font-normal ml-1 text-content-subtle">kg/tDS</span>
-            </p>
-          </div>
+        {plantProfile === "wastewater" && kpis.polymer_dose_ppm !== undefined && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {/* Polymer KPIs */}
+            <div className="p-3 bg-surface-elevated rounded-lg border border-glass-border">
+              <h5 className="text-xs font-medium text-viz-polymer mb-1">
+                Effective Dose
+              </h5>
+              <p className="text-lg font-bold font-mono text-content-primary">
+                {kpis.polymer_dose_ppm.toFixed(1)}
+                <span className="text-sm font-normal ml-1 text-content-subtle">ppm</span>
+              </p>
+            </div>
+            <div className="p-3 bg-surface-elevated rounded-lg border border-glass-border">
+              <h5 className="text-xs font-medium text-viz-polymer mb-1">
+                Consumption
+              </h5>
+              <p className="text-lg font-bold font-mono text-content-primary">
+                {kpis.polymer_kg_per_tDS.toFixed(2)}
+                <span className="text-sm font-normal ml-1 text-content-subtle">kg/tDS</span>
+              </p>
+            </div>
 
-          {/* Dewatering KPIs */}
-          <div className="p-3 bg-surface-elevated rounded-lg border border-glass-border">
-            <h5 className="text-xs font-medium text-viz-dewatering mb-1">
-              Cake Dryness
-            </h5>
-            <p className="text-lg font-bold font-mono text-content-primary">
-              {kpis.cake_dryness_percent.toFixed(1)}
-              <span className="text-sm font-normal ml-1 text-content-subtle">% DS</span>
-            </p>
+            {/* Dewatering KPIs */}
+            <div className="p-3 bg-surface-elevated rounded-lg border border-glass-border">
+              <h5 className="text-xs font-medium text-viz-dewatering mb-1">
+                Cake Dryness
+              </h5>
+              <p className="text-lg font-bold font-mono text-content-primary">
+                {kpis.cake_dryness_percent.toFixed(1)}
+                <span className="text-sm font-normal ml-1 text-content-subtle">% DS</span>
+              </p>
+            </div>
+            <div className="p-3 bg-surface-elevated rounded-lg border border-glass-border">
+              <h5 className="text-xs font-medium text-viz-dewatering mb-1">
+                Capture Rate
+              </h5>
+              <p className="text-lg font-bold font-mono text-content-primary">
+                {kpis.solids_capture_actual_percent.toFixed(1)}
+                <span className="text-sm font-normal ml-1 text-content-subtle">%</span>
+              </p>
+            </div>
           </div>
-          <div className="p-3 bg-surface-elevated rounded-lg border border-glass-border">
-            <h5 className="text-xs font-medium text-viz-dewatering mb-1">
-              Capture Rate
-            </h5>
-            <p className="text-lg font-bold font-mono text-content-primary">
-              {kpis.solids_capture_actual_percent.toFixed(1)}
-              <span className="text-sm font-normal ml-1 text-content-subtle">%</span>
-            </p>
+        )}
+
+        {/* Drinking Water KPIs */}
+        {plantProfile === "drinking_water" && (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="p-3 bg-surface-elevated rounded-lg border border-glass-border">
+              <h5 className="text-xs font-medium text-blue-500 mb-1">
+                Water Produced
+              </h5>
+              <p className="text-lg font-bold font-mono text-content-primary">
+                {streams.feed ? (streams.feed.volumetric_flow_m3_h * (plantConfiguration.settings.operating_hours_per_day || 24)).toFixed(0) : '—'}
+                <span className="text-sm font-normal ml-1 text-content-subtle">m³/day</span>
+              </p>
+            </div>
+            {kpis.water_recovery_percent !== undefined && (
+              <div className="p-3 bg-surface-elevated rounded-lg border border-glass-border">
+                <h5 className="text-xs font-medium text-emerald-500 mb-1">
+                  Recovery Rate
+                </h5>
+                <p className="text-lg font-bold font-mono text-content-primary">
+                  {kpis.water_recovery_percent.toFixed(1)}
+                  <span className="text-sm font-normal ml-1 text-content-subtle">%</span>
+                </p>
+              </div>
+            )}
+            {kpis.solids_removed_percent !== undefined && (
+              <div className="p-3 bg-surface-elevated rounded-lg border border-glass-border">
+                <h5 className="text-xs font-medium text-amber-500 mb-1">
+                  Solids Removed
+                </h5>
+                <p className="text-lg font-bold font-mono text-content-primary">
+                  {kpis.solids_removed_percent.toFixed(1)}
+                  <span className="text-sm font-normal ml-1 text-content-subtle">%</span>
+                </p>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {/* Mass Balance Closure */}
-        <div className="flex items-center justify-center gap-2 p-2 bg-surface-elevated rounded-lg border border-glass-border">
-          <span className="text-sm text-content-secondary">Mass Balance Closure:</span>
-          <span
-            className={`text-sm font-medium font-mono ${
-              Math.abs(kpis.mass_balance_closure_percent - 100) < 0.1
-                ? "text-status-success"
-                : "text-status-warning"
-            }`}
-          >
-            {kpis.mass_balance_closure_percent.toFixed(2)}%
-          </span>
-        </div>
+        {kpis.mass_balance_closure_percent !== undefined && (
+          <div className="flex items-center justify-center gap-2 p-2 bg-surface-elevated rounded-lg border border-glass-border">
+            <span className="text-sm text-content-secondary">Mass Balance Closure:</span>
+            <span
+              className={`text-sm font-medium font-mono ${
+                Math.abs(kpis.mass_balance_closure_percent - 100) < 0.1
+                  ? "text-status-success"
+                  : "text-status-warning"
+              }`}
+            >
+              {kpis.mass_balance_closure_percent.toFixed(2)}%
+            </span>
+          </div>
+        )}
 
         {/* TCO Analysis Section */}
         {(() => {
@@ -519,7 +622,7 @@ export function ResultsPanel() {
                       <div className="flex items-center gap-2">
                         <h5 className="text-xs font-semibold text-content-secondary">Total Plant Cost</h5>
                         <span className="text-xs text-content-subtle">
-                          ({streams.feed.volumetric_flow_m3_h.toFixed(0)} m³/h × {plantConfiguration.settings.operating_hours_per_day || 24}h/day)
+                          ({streams.feed ? streams.feed.volumetric_flow_m3_h.toFixed(0) : '—'} m³/h × {plantConfiguration.settings.operating_hours_per_day || 24}h/day)
                         </span>
                       </div>
                       <div className="flex gap-1">

@@ -3,7 +3,7 @@
  * Dark glass morphism design with icon-only buttons and tooltips.
  * Draggable to reposition on the screen.
  */
-import { DragEvent, useState, useRef, useEffect, useCallback } from "react";
+import { DragEvent, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   Droplets,
   Zap,
@@ -12,8 +12,14 @@ import {
   CircleDot,
   Layers,
   GripVertical,
+  Wind,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Container,
 } from "lucide-react";
-import type { EquipmentType } from "../../types";
+import type { EquipmentType, PlantProfile } from "../../types";
+import { useStore } from "../../store/useStore";
+import { getProfilePreset } from "../../config/profilePresets";
 
 interface EquipmentItem {
   type: EquipmentType;
@@ -24,7 +30,9 @@ interface EquipmentItem {
   description: string;
 }
 
-const EQUIPMENT_ITEMS: EquipmentItem[] = [
+// All equipment items - filtered by profile
+const ALL_EQUIPMENT_ITEMS: EquipmentItem[] = [
+  // Wastewater Treatment nodes
   {
     type: "feed",
     label: "Feed",
@@ -73,6 +81,55 @@ const EQUIPMENT_ITEMS: EquipmentItem[] = [
     bgColor: "bg-viz-dewatering/20 hover:bg-viz-dewatering/30",
     description: "Dewatering unit",
   },
+  // Drinking Water Treatment nodes
+  {
+    type: "coagulant",
+    label: "Coagulant",
+    icon: <Droplets className="w-5 h-5" />,
+    color: "text-amber-500",
+    bgColor: "bg-amber-500/20 hover:bg-amber-500/30",
+    description: "Coagulant dosing",
+  },
+  {
+    type: "flocculator",
+    label: "Flocculator",
+    icon: <Wind className="w-5 h-5" />,
+    color: "text-indigo-500",
+    bgColor: "bg-indigo-500/20 hover:bg-indigo-500/30",
+    description: "Gentle mixing",
+  },
+  {
+    type: "sedimentation",
+    label: "Sedimentation",
+    icon: <ArrowDownToLine className="w-5 h-5" />,
+    color: "text-pink-500",
+    bgColor: "bg-pink-500/20 hover:bg-pink-500/30",
+    description: "Gravity settling",
+  },
+  {
+    type: "daf",
+    label: "DAF",
+    icon: <ArrowUpFromLine className="w-5 h-5" />,
+    color: "text-cyan-500",
+    bgColor: "bg-cyan-500/20 hover:bg-cyan-500/30",
+    description: "Dissolved air flotation",
+  },
+  {
+    type: "filter",
+    label: "Filter",
+    icon: <Filter className="w-5 h-5" />,
+    color: "text-emerald-500",
+    bgColor: "bg-emerald-500/20 hover:bg-emerald-500/30",
+    description: "Rapid sand filter",
+  },
+  {
+    type: "clearwell",
+    label: "Clearwell",
+    icon: <Container className="w-5 h-5" />,
+    color: "text-blue-500",
+    bgColor: "bg-blue-500/20 hover:bg-blue-500/30",
+    description: "Contact tank",
+  },
 ];
 
 // Storage key for persisting dock position
@@ -88,6 +145,18 @@ interface EquipmentDockProps {
 }
 
 export function EquipmentDock({ className = "" }: EquipmentDockProps) {
+  // Get current profile from store
+  const currentProfile: PlantProfile = useStore(
+    (state) => state.plantConfiguration.settings.plant_profile || "wastewater"
+  );
+
+  // Filter equipment items based on current profile
+  const equipmentItems = useMemo(() => {
+    const preset = getProfilePreset(currentProfile);
+    const availableTypes = new Set(preset.availableNodeTypes);
+    return ALL_EQUIPMENT_ITEMS.filter((item) => availableTypes.has(item.type));
+  }, [currentProfile]);
+
   const [dragging, setDragging] = useState<EquipmentType | null>(null);
   const [hoveredItem, setHoveredItem] = useState<EquipmentType | null>(null);
 
@@ -223,7 +292,7 @@ export function EquipmentDock({ className = "" }: EquipmentDockProps) {
 
       {/* Equipment items */}
       <div className="flex items-center gap-1">
-        {EQUIPMENT_ITEMS.map((item) => (
+        {equipmentItems.map((item) => (
           <div key={item.type} className="relative">
             <button
               draggable

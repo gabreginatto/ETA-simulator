@@ -98,6 +98,43 @@
   --node-thickener-accent: #0d9488;
   --node-thickener-text: #115e59;
 
+  /* Drinking Water Treatment nodes - Light */
+  --node-coagulant-bg: linear-gradient(135deg, #fef3c7 0%, #fef9c3 100%);
+  --node-coagulant-border: #fbbf24;
+  --node-coagulant-header: rgba(245, 158, 11, 0.08);
+  --node-coagulant-accent: #d97706;
+  --node-coagulant-text: #92400e;
+
+  --node-flocculator-bg: linear-gradient(135deg, #e0e7ff 0%, #eef2ff 100%);
+  --node-flocculator-border: #a5b4fc;
+  --node-flocculator-header: rgba(99, 102, 241, 0.06);
+  --node-flocculator-accent: #4f46e5;
+  --node-flocculator-text: #3730a3;
+
+  --node-sedimentation-bg: linear-gradient(135deg, #fce7f3 0%, #fdf2f8 100%);
+  --node-sedimentation-border: #f9a8d4;
+  --node-sedimentation-header: rgba(236, 72, 153, 0.06);
+  --node-sedimentation-accent: #db2777;
+  --node-sedimentation-text: #9d174d;
+
+  --node-daf-bg: linear-gradient(135deg, #cffafe 0%, #e0f2fe 100%);
+  --node-daf-border: #67e8f9;
+  --node-daf-header: rgba(6, 182, 212, 0.08);
+  --node-daf-accent: #0891b2;
+  --node-daf-text: #155e75;
+
+  --node-filter-bg: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
+  --node-filter-border: #6ee7b7;
+  --node-filter-header: rgba(16, 185, 129, 0.06);
+  --node-filter-accent: #059669;
+  --node-filter-text: #065f46;
+
+  --node-clearwell-bg: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+  --node-clearwell-border: #60a5fa;
+  --node-clearwell-header: rgba(37, 99, 235, 0.06);
+  --node-clearwell-accent: #2563eb;
+  --node-clearwell-text: #1e40af;
+
   --node-text-primary: #292524;
   --node-text-secondary: #78716c;
   --node-text-muted: #a8a29e;
@@ -193,6 +230,43 @@
   --node-thickener-header: rgba(0, 150, 136, 0.1);
   --node-thickener-accent: #26a69a;
   --node-thickener-text: #4db6ac;
+
+  /* Drinking Water Treatment nodes - Dark */
+  --node-coagulant-bg: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(217, 119, 6, 0.08) 100%);
+  --node-coagulant-border: rgba(245, 158, 11, 0.3);
+  --node-coagulant-header: rgba(245, 158, 11, 0.1);
+  --node-coagulant-accent: #fbbf24;
+  --node-coagulant-text: #fcd34d;
+
+  --node-flocculator-bg: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(79, 70, 229, 0.08) 100%);
+  --node-flocculator-border: rgba(99, 102, 241, 0.3);
+  --node-flocculator-header: rgba(99, 102, 241, 0.1);
+  --node-flocculator-accent: #818cf8;
+  --node-flocculator-text: #a5b4fc;
+
+  --node-sedimentation-bg: linear-gradient(135deg, rgba(236, 72, 153, 0.12) 0%, rgba(219, 39, 119, 0.08) 100%);
+  --node-sedimentation-border: rgba(236, 72, 153, 0.3);
+  --node-sedimentation-header: rgba(236, 72, 153, 0.1);
+  --node-sedimentation-accent: #f472b6;
+  --node-sedimentation-text: #f9a8d4;
+
+  --node-daf-bg: linear-gradient(135deg, rgba(6, 182, 212, 0.12) 0%, rgba(8, 145, 178, 0.08) 100%);
+  --node-daf-border: rgba(6, 182, 212, 0.3);
+  --node-daf-header: rgba(6, 182, 212, 0.1);
+  --node-daf-accent: #22d3ee;
+  --node-daf-text: #67e8f9;
+
+  --node-filter-bg: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.08) 100%);
+  --node-filter-border: rgba(16, 185, 129, 0.3);
+  --node-filter-header: rgba(16, 185, 129, 0.1);
+  --node-filter-accent: #34d399;
+  --node-filter-text: #6ee7b7;
+
+  --node-clearwell-bg: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(29, 78, 216, 0.08) 100%);
+  --node-clearwell-border: rgba(37, 99, 235, 0.3);
+  --node-clearwell-header: rgba(37, 99, 235, 0.1);
+  --node-clearwell-accent: #60a5fa;
+  --node-clearwell-text: #93c5fd;
 
   --node-text-primary: #e2e8f0;
   --node-text-secondary: #94a3b8;

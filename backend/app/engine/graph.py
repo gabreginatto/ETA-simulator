@@ -151,6 +151,66 @@ EQUIPMENT_PORTS: Dict[str, EquipmentPorts] = {
             Port("supernatant", PortType.LIQUID, PortDirection.OUTPUT, "Supernatant")
         ]
     ),
+    # =========================================================================
+    # Drinking Water Treatment Equipment
+    # =========================================================================
+    # Coagulant - adds coagulant to raw water
+    "coagulant": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Raw Water In")
+        ],
+        outputs=[
+            Port("output", PortType.SLUDGE, PortDirection.OUTPUT, "Coagulated Out")
+        ]
+    ),
+    # Flocculator - provides gentle mixing for floc growth
+    "flocculator": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Water In")
+        ],
+        outputs=[
+            Port("output", PortType.SLUDGE, PortDirection.OUTPUT, "Flocculated Out")
+        ]
+    ),
+    # Sedimentation - gravity settling basin
+    "sedimentation": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Water In")
+        ],
+        outputs=[
+            Port("clarified", PortType.SLUDGE, PortDirection.OUTPUT, "Clarified Out"),
+            Port("sludge", PortType.SLUDGE, PortDirection.OUTPUT, "Sludge Out")
+        ]
+    ),
+    # DAF - Dissolved Air Flotation
+    "daf": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Water In")
+        ],
+        outputs=[
+            Port("clarified", PortType.SLUDGE, PortDirection.OUTPUT, "Clarified Out"),
+            Port("float", PortType.SLUDGE, PortDirection.OUTPUT, "Float Out")
+        ]
+    ),
+    # Filter - rapid sand/dual media filter
+    "filter": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Water In")
+        ],
+        outputs=[
+            Port("filtered", PortType.SLUDGE, PortDirection.OUTPUT, "Filtered Out"),
+            Port("backwash", PortType.SLUDGE, PortDirection.OUTPUT, "Backwash Waste")
+        ]
+    ),
+    # Clearwell - contact tank for disinfection
+    "clearwell": EquipmentPorts(
+        inputs=[
+            Port("input", PortType.SLUDGE, PortDirection.INPUT, "Water In")
+        ],
+        outputs=[
+            Port("output", PortType.SLUDGE, PortDirection.OUTPUT, "Finished Water")
+        ]
+    ),
 }
 
 
@@ -319,7 +379,12 @@ class GraphValidator:
 # =============================================================================
 
 # Valid node types for the graph-based API
-VALID_NODE_TYPES = {"feed", "pump", "polymer", "dewatering", "clarifier", "thickener"}
+# Wastewater nodes
+WASTEWATER_NODE_TYPES = {"feed", "pump", "polymer", "dewatering", "clarifier", "thickener"}
+# Drinking water nodes
+DRINKING_WATER_NODE_TYPES = {"coagulant", "flocculator", "sedimentation", "daf", "filter", "clearwell"}
+# All valid node types (union of both profiles)
+VALID_NODE_TYPES = WASTEWATER_NODE_TYPES | DRINKING_WATER_NODE_TYPES
 
 
 def build_incoming_edge_map(edges: List[Dict]) -> Dict[str, List[Dict]]:

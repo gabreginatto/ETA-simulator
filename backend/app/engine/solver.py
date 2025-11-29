@@ -59,6 +59,13 @@ from app.engine.graph import (
 )
 from app.engine.clarifier import simulate_clarifier
 from app.engine.thickener import simulate_thickener
+# Drinking water treatment nodes
+from app.engine.coagulant import simulate_coagulant
+from app.engine.flocculator import simulate_flocculator
+from app.engine.sedimentation import simulate_sedimentation
+from app.engine.daf import simulate_daf
+from app.engine.filter import simulate_filter
+from app.engine.clearwell import simulate_clearwell
 
 
 # =============================================================================
@@ -180,6 +187,111 @@ def execute_thickener(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict
 
 
 # =============================================================================
+# Drinking Water Treatment Nodes
+# =============================================================================
+
+@register_node("coagulant")
+def execute_coagulant(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute coagulant node - adds coagulant to water."""
+    input_stream = inputs.get("input")
+    if not input_stream:
+        raise ValueError("Coagulant node requires input stream")
+
+    out = simulate_coagulant(
+        feed=input_stream,
+        dose_mg_L=params.get("dose_mg_L", 30.0),
+        coagulant_type=params.get("coagulant_type", "alum"),
+        stream_id="coagulated",
+    )
+    return {"output": out}
+
+
+@register_node("flocculator")
+def execute_flocculator(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute flocculator node - provides gentle mixing for floc growth."""
+    input_stream = inputs.get("input")
+    if not input_stream:
+        raise ValueError("Flocculator requires input stream")
+
+    out = simulate_flocculator(
+        feed=input_stream,
+        detention_time_min=params.get("detention_time_min", 20.0),
+        g_value=params.get("g_value", 50.0),
+        stream_id="flocculated",
+    )
+    return {"output": out}
+
+
+@register_node("sedimentation")
+def execute_sedimentation(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute sedimentation basin node - separates clarified water and sludge."""
+    input_stream = inputs.get("input")
+    if not input_stream:
+        raise ValueError("Sedimentation requires input stream")
+
+    result = simulate_sedimentation(
+        feed=input_stream,
+        capture_rate=params.get("capture_rate", 0.90),
+        underflow_solids_percent=params.get("underflow_solids_percent", 1.0),
+        clarified_id="sed_clarified",
+        sludge_id="sed_sludge",
+    )
+    return {"clarified": result["clarified"], "sludge": result["sludge"]}
+
+
+@register_node("daf")
+def execute_daf(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute DAF node - floats solids to surface."""
+    input_stream = inputs.get("input")
+    if not input_stream:
+        raise ValueError("DAF requires input stream")
+
+    result = simulate_daf(
+        feed=input_stream,
+        capture_rate=params.get("capture_rate", 0.92),
+        float_solids_percent=params.get("float_solids_percent", 2.0),
+        air_to_solids_ratio=params.get("air_to_solids_ratio", 0.02),
+        recycle_rate=params.get("recycle_rate", 0.10),
+        clarified_id="daf_clarified",
+        float_id="daf_float",
+    )
+    return {"clarified": result["clarified"], "float": result["float"]}
+
+
+@register_node("filter")
+def execute_filter(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute rapid filter node - removes remaining solids."""
+    input_stream = inputs.get("input")
+    if not input_stream:
+        raise ValueError("Filter requires input stream")
+
+    result = simulate_filter(
+        feed=input_stream,
+        capture_rate=params.get("capture_rate", 0.95),
+        run_length_h=params.get("run_length_h", 24.0),
+        filtered_id="filtered",
+        backwash_id="backwash",
+    )
+    return {"filtered": result["filtered"], "backwash": result["backwash"]}
+
+
+@register_node("clearwell")
+def execute_clearwell(params: Dict[str, Any], inputs: Dict[str, Stream]) -> Dict[str, Stream]:
+    """Execute clearwell node - provides contact time for disinfection."""
+    input_stream = inputs.get("input")
+    if not input_stream:
+        raise ValueError("Clearwell requires input stream")
+
+    out = simulate_clearwell(
+        feed=input_stream,
+        volume_m3=params.get("volume_m3", 500.0),
+        contact_time_min=params.get("contact_time_min", 30.0),
+        stream_id="finished",
+    )
+    return {"output": out}
+
+
+# =============================================================================
 # Helper Functions
 # =============================================================================
 
@@ -196,6 +308,247 @@ def _find_stream_by_type(
             if key in streams:
                 return streams[key]
     return None
+
+
+def _detect_plant_profile(nodes: List[Dict], settings: Optional[Dict] = None) -> str:
+    """
+    Detect plant profile based on nodes present or settings.
+
+    Returns:
+        "wastewater" or "drinking_water"
+    """
+    # Check settings first
+    if settings and settings.get("plant_profile"):
+        return settings.get("plant_profile")
+
+    # Detect based on node types present
+    node_types = {n["type"] for n in nodes}
+
+    # Drinking water indicators
+    drinking_water_types = {"coagulant", "flocculator", "sedimentation", "daf", "filter", "clearwell"}
+    # Wastewater indicators
+    wastewater_types = {"polymer", "dewatering"}
+
+    has_drinking = bool(node_types & drinking_water_types)
+    has_wastewater = bool(node_types & wastewater_types)
+
+    if has_drinking and not has_wastewater:
+        return "drinking_water"
+
+    return "wastewater"
+
+
+def _compute_drinking_water_kpis(
+    feed: Stream,
+    finished: Stream,
+    coagulated: Optional[Stream],
+    filtered: Optional[Stream],
+    backwash: Optional[Stream],
+    sed_sludge: Optional[Stream],
+    daf_float: Optional[Stream],
+    settings: Dict[str, Any],
+    pump_power_kW: float = 0.0,
+) -> Dict[str, Any]:
+    """
+    Compute KPIs for drinking water treatment plant.
+
+    Args:
+        feed: Raw water input stream
+        finished: Finished water output stream
+        coagulated: Stream after coagulation (optional)
+        filtered: Filtered water stream (optional)
+        backwash: Filter backwash waste stream (optional)
+        sed_sludge: Sedimentation sludge stream (optional)
+        daf_float: DAF float (waste) stream (optional)
+        settings: Plant settings
+        pump_power_kW: Pump power consumption
+
+    Returns:
+        Dictionary of KPI values
+    """
+    operating_hours = settings.get("operating_hours_per_day", 24.0)
+
+    # Basic flow KPIs
+    feed_flow = feed.volumetric_flow_m3_h if feed else 0
+    finished_flow = finished.volumetric_flow_m3_h if finished else 0
+
+    # Water recovery
+    water_recovery = (finished_flow / feed_flow * 100) if feed_flow > 0 else 0
+
+    # Coagulant consumption
+    coagulant_dose_mg_L = settings.get("coagulant_dose_mg_L", 30.0)
+    coagulant_kg_per_h = (coagulant_dose_mg_L * feed_flow) / 1000  # mg/L * m³/h * 1000L/m³ / 1e6 mg/kg
+    coagulant_kg_per_day = coagulant_kg_per_h * operating_hours
+
+    # Residuals/sludge production
+    residuals_flow = 0.0
+    residuals_ds_kg_h = 0.0
+    if sed_sludge:
+        residuals_flow += sed_sludge.volumetric_flow_m3_h
+        residuals_ds_kg_h += sed_sludge.dry_solids_mass_flow_kg_h
+    if daf_float:
+        residuals_flow += daf_float.volumetric_flow_m3_h
+        residuals_ds_kg_h += daf_float.dry_solids_mass_flow_kg_h
+    if backwash:
+        residuals_flow += backwash.volumetric_flow_m3_h
+        residuals_ds_kg_h += backwash.dry_solids_mass_flow_kg_h
+
+    # Finished water quality estimate (solids remaining)
+    finished_solids_mg_L = 0
+    if finished:
+        # Convert fraction to mg/L (ppm equivalent)
+        finished_solids_mg_L = finished.dry_solids_fraction * 1e6 if finished.dry_solids_fraction else 0
+        # Cap at reasonable turbidity proxy
+        finished_solids_mg_L = min(finished_solids_mg_L, 1000)
+
+    # Filter metrics
+    filter_run_h = settings.get("filter_runtime_hours_to_clog", 24.0)
+    filters_count = settings.get("filters_in_parallel", 4)
+    backwash_per_day = (24 / filter_run_h) * filters_count if filter_run_h > 0 else 0
+
+    # Energy
+    energy_kwh_per_day = pump_power_kW * operating_hours
+
+    kpis = {
+        # Flow metrics
+        "feed_flow_m3_h": feed_flow,
+        "finished_water_flow_m3_h": finished_flow,
+        "water_recovery_percent": water_recovery,
+
+        # Coagulant metrics
+        "coagulant_dose_mg_L": coagulant_dose_mg_L,
+        "coagulant_kg_per_h": coagulant_kg_per_h,
+        "coagulant_kg_per_day": coagulant_kg_per_day,
+
+        # Residuals metrics
+        "residuals_flow_m3_h": residuals_flow,
+        "residuals_mass_kg_h": residuals_ds_kg_h,
+        "residuals_tons_per_day": (residuals_ds_kg_h * operating_hours) / 1000,
+
+        # Quality metrics
+        "finished_water_turbidity_ntu": finished_solids_mg_L,  # Rough proxy
+
+        # Filter metrics
+        "filter_washes_per_day": backwash_per_day,
+
+        # Energy metrics
+        "pump_power_kW": pump_power_kW,
+        "energy_kwh_per_day": energy_kwh_per_day,
+
+        # Mass balance
+        "mass_balance_closure_percent": 100.0,  # Simplified for now
+        "solids_capture_actual_percent": water_recovery,
+
+        # Placeholder polymer metrics (not applicable to WTP but needed for UI)
+        "polymer_dose_ppm": 0,
+        "polymer_kg_per_tDS": 0,
+        "polymer_kg_per_h": 0,
+        "polymer_kg_per_day": 0,
+        "polymer_kg_per_month": 0,
+        "cake_dryness_percent": 0,
+        "cake_mass_kg_per_h": 0,
+        "cake_wet_tons_per_day": 0,
+        "cake_tDS_per_day": 0,
+        "liquid_flow_m3_h": 0,
+        "liquid_tss_estimate_mg_L": 0,
+    }
+
+    return kpis
+
+
+def _compute_drinking_water_tco(
+    feed: Stream,
+    finished: Stream,
+    coagulated: Optional[Stream],
+    backwash: Optional[Stream],
+    sed_sludge: Optional[Stream],
+    daf_float: Optional[Stream],
+    settings: Dict[str, Any],
+) -> Tuple[Dict[str, Any], List[str]]:
+    """
+    Compute TCO for drinking water treatment plant.
+
+    Returns:
+        Tuple of (TCO results dict, warnings list)
+    """
+    warnings: List[str] = []
+    operating_hours = settings.get("operating_hours_per_day", 24.0)
+
+    feed_flow = feed.volumetric_flow_m3_h if feed else 0
+    finished_flow = finished.volumetric_flow_m3_h if finished else 0
+
+    # Chemical costs (coagulant)
+    coagulant_price = settings.get("coagulant_price_per_kg", 2.0)
+    coagulant_dose_mg_L = settings.get("coagulant_dose_mg_L", 30.0)
+    coagulant_kg_per_h = (coagulant_dose_mg_L * feed_flow) / 1000
+    chemical_cost_per_h = coagulant_kg_per_h * coagulant_price
+
+    # Filtration costs (water for backwash)
+    water_cost = settings.get("water_cost_per_m3", 1.5)
+    backwash_volume = settings.get("backwash_volume_m3", 10.0)
+    filter_run_h = settings.get("filter_runtime_hours_to_clog", 24.0)
+    filters_count = settings.get("filters_in_parallel", 4)
+
+    if filter_run_h and filters_count and backwash_volume:
+        backwash_per_day = (24 / filter_run_h) * filters_count
+        filtration_cost_per_day = backwash_per_day * backwash_volume * water_cost
+    else:
+        filtration_cost_per_day = 0
+        warnings.append("Filtration cost not calculated: missing filter settings")
+
+    # Sludge disposal costs
+    disposal_cost_per_ton = settings.get("disposal_cost_per_ton_wet", 60.0)
+    residuals_tons_per_day = 0
+    if sed_sludge:
+        residuals_tons_per_day += (sed_sludge.mass_flow_kg_h * operating_hours) / 1000
+    if daf_float:
+        residuals_tons_per_day += (daf_float.mass_flow_kg_h * operating_hours) / 1000
+    if backwash:
+        # Backwash is mostly water, so count dry solids
+        residuals_tons_per_day += (backwash.dry_solids_mass_flow_kg_h * operating_hours) / 1000
+
+    sludge_cost_per_day = residuals_tons_per_day * disposal_cost_per_ton
+
+    # Logistics costs
+    storage_cost = settings.get("storage_cost_per_kg", 0.3)
+    handling_cost = settings.get("handling_cost_per_kg", 0.1)
+    logistics_cost_per_day = (coagulant_kg_per_h * operating_hours) * (storage_cost + handling_cost)
+
+    # Daily totals
+    chemical_cost_per_day = chemical_cost_per_h * operating_hours
+    total_per_day = chemical_cost_per_day + filtration_cost_per_day + sludge_cost_per_day + logistics_cost_per_day
+
+    # Calculate per 1000 m³ (unitary cost)
+    daily_volume_m3 = feed_flow * operating_hours
+    if daily_volume_m3 > 0:
+        factor = 1000 / daily_volume_m3
+        per_1000m3 = {
+            "chemicals": chemical_cost_per_day * factor,
+            "filtration": filtration_cost_per_day * factor,
+            "sludge": sludge_cost_per_day * factor,
+            "logistics": logistics_cost_per_day * factor,
+            "total": total_per_day * factor,
+        }
+    else:
+        per_1000m3 = {"chemicals": 0, "filtration": 0, "sludge": 0, "logistics": 0, "total": 0}
+
+    per_day = {
+        "chemicals": chemical_cost_per_day,
+        "filtration": filtration_cost_per_day,
+        "sludge": sludge_cost_per_day,
+        "logistics": logistics_cost_per_day,
+        "total": total_per_day,
+    }
+
+    per_month = {k: v * 30 for k, v in per_day.items()}
+    per_year = {k: v * 365 for k, v in per_day.items()}
+
+    return {
+        "per_1000m3": per_1000m3,
+        "per_day": per_day,
+        "per_month": per_month,
+        "per_year": per_year,
+    }, warnings
 
 
 def _generate_parameter_warnings(
@@ -454,15 +807,20 @@ def solve_graph(
                 streams[(node_id, handle_id)] = stream
 
         # ---------------------------------------------------------------------
-        # 5. Extract linear path streams for KPI computation
+        # 5. Detect plant profile and extract streams accordingly
         # ---------------------------------------------------------------------
+        plant_profile = _detect_plant_profile(nodes, settings)
+
+        # Common streams
         feed_stream = _find_stream_by_type(nodes, streams, "feed", "output")
+        pump_stream = _find_stream_by_type(nodes, streams, "pump", "output")
+
+        # Wastewater-specific streams
         conditioned_stream = _find_stream_by_type(nodes, streams, "polymer", "output")
         cake_stream = _find_stream_by_type(nodes, streams, "dewatering", "cake")
         liquid_stream = _find_stream_by_type(nodes, streams, "dewatering", "liquid")
-        pump_stream = _find_stream_by_type(nodes, streams, "pump", "output")
 
-        # Clarifier streams (optional)
+        # Clarifier streams (optional, used in both profiles)
         clarifier_overflow = _find_stream_by_type(nodes, streams, "clarifier", "overflow")
         clarifier_underflow = _find_stream_by_type(nodes, streams, "clarifier", "underflow")
 
@@ -470,55 +828,120 @@ def solve_graph(
         thickened_stream = _find_stream_by_type(nodes, streams, "thickener", "thickened")
         supernatant_stream = _find_stream_by_type(nodes, streams, "thickener", "supernatant")
 
-        # ---------------------------------------------------------------------
-        # 5b. Validate required streams exist before KPI calculation
-        # ---------------------------------------------------------------------
-        required_streams = {
-            "feed": feed_stream,
-            "polymer (conditioned)": conditioned_stream,
-            "dewatering (cake)": cake_stream,
-            "dewatering (liquid)": liquid_stream,
-        }
-        missing = [name for name, stream in required_streams.items() if stream is None]
-        if missing:
-            result["errors"].append(
-                f"Incomplete graph: missing required streams from {', '.join(missing)}. "
-                "A complete simulation requires at minimum: feed → polymer → dewatering."
-            )
-            return result
+        # Drinking water-specific streams
+        coagulated_stream = _find_stream_by_type(nodes, streams, "coagulant", "output")
+        flocculated_stream = _find_stream_by_type(nodes, streams, "flocculator", "output")
+        sed_clarified_stream = _find_stream_by_type(nodes, streams, "sedimentation", "clarified")
+        sed_sludge_stream = _find_stream_by_type(nodes, streams, "sedimentation", "sludge")
+        daf_clarified_stream = _find_stream_by_type(nodes, streams, "daf", "clarified")
+        daf_float_stream = _find_stream_by_type(nodes, streams, "daf", "float")
+        filtered_stream = _find_stream_by_type(nodes, streams, "filter", "filtered")
+        backwash_stream = _find_stream_by_type(nodes, streams, "filter", "backwash")
+        finished_stream = _find_stream_by_type(nodes, streams, "clearwell", "output")
 
         # ---------------------------------------------------------------------
-        # 6. Compute KPIs
+        # 5b. Validate required streams based on profile
+        # ---------------------------------------------------------------------
+        if plant_profile == "drinking_water":
+            # For drinking water: need feed and at least one treatment step
+            if not feed_stream:
+                result["errors"].append(
+                    "Incomplete graph: missing feed stream. "
+                    "A drinking water simulation requires at minimum: feed → treatment process."
+                )
+                return result
+            # Find the final water output for KPIs
+            # Priority: clearwell > filter > sedimentation/daf > flocculator > coagulant
+            finished_water = (
+                finished_stream or
+                filtered_stream or
+                sed_clarified_stream or
+                daf_clarified_stream or
+                flocculated_stream or
+                coagulated_stream
+            )
+            if not finished_water:
+                result["errors"].append(
+                    "Incomplete graph: no treated water output found. "
+                    "Connect nodes from feed through treatment to produce finished water."
+                )
+                return result
+        else:
+            # Wastewater profile - require full dewatering path
+            required_streams = {
+                "feed": feed_stream,
+                "polymer (conditioned)": conditioned_stream,
+                "dewatering (cake)": cake_stream,
+                "dewatering (liquid)": liquid_stream,
+            }
+            missing = [name for name, stream in required_streams.items() if stream is None]
+            if missing:
+                result["errors"].append(
+                    f"Incomplete graph: missing required streams from {', '.join(missing)}. "
+                    "A complete simulation requires at minimum: feed → polymer → dewatering."
+                )
+                return result
+
+        # ---------------------------------------------------------------------
+        # 6. Compute KPIs (profile-aware)
         # ---------------------------------------------------------------------
         pump_power = 0.0
         if pump_stream:
             pump_power = getattr(pump_stream, "power_kW", 0.0)
 
         settings = settings or {}
-        kpis = compute_kpis(
-            feed=feed_stream,
-            conditioned=conditioned_stream,
-            cake=cake_stream,
-            liquid=liquid_stream,
-            polymer_price_per_kg=settings.get("polymer_price_per_kg"),
-            electricity_price_per_kwh=settings.get("electricity_price_per_kwh"),
-            operating_hours_per_day=settings.get("operating_hours_per_day", 24.0),
-            pump_power_kW=pump_power,
-        )
+
+        if plant_profile == "drinking_water":
+            # Drinking water KPIs
+            kpis = _compute_drinking_water_kpis(
+                feed=feed_stream,
+                finished=finished_water,
+                coagulated=coagulated_stream,
+                filtered=filtered_stream,
+                backwash=backwash_stream,
+                sed_sludge=sed_sludge_stream,
+                daf_float=daf_float_stream,
+                settings=settings,
+                pump_power_kW=pump_power,
+            )
+        else:
+            # Wastewater KPIs (original logic)
+            kpis = compute_kpis(
+                feed=feed_stream,
+                conditioned=conditioned_stream,
+                cake=cake_stream,
+                liquid=liquid_stream,
+                polymer_price_per_kg=settings.get("polymer_price_per_kg"),
+                electricity_price_per_kwh=settings.get("electricity_price_per_kwh"),
+                operating_hours_per_day=settings.get("operating_hours_per_day", 24.0),
+                pump_power_kW=pump_power,
+            )
 
         # ---------------------------------------------------------------------
-        # 6b. Compute TCO (Total Cost of Ownership)
+        # 6b. Compute TCO (Total Cost of Ownership) - profile-aware
         # ---------------------------------------------------------------------
         tco_validation_warnings = validate_tco_settings(settings)
         result["warnings"].extend(tco_validation_warnings)
 
-        tco_results, tco_warnings = compute_tco(
-            feed=feed_stream,
-            conditioned=conditioned_stream,
-            cake=cake_stream,
-            liquid=liquid_stream,
-            settings=settings,
-        )
+        if plant_profile == "drinking_water":
+            # For drinking water, compute TCO differently
+            tco_results, tco_warnings = _compute_drinking_water_tco(
+                feed=feed_stream,
+                finished=finished_water,
+                coagulated=coagulated_stream,
+                backwash=backwash_stream,
+                sed_sludge=sed_sludge_stream,
+                daf_float=daf_float_stream,
+                settings=settings,
+            )
+        else:
+            tco_results, tco_warnings = compute_tco(
+                feed=feed_stream,
+                conditioned=conditioned_stream,
+                cake=cake_stream,
+                liquid=liquid_stream,
+                settings=settings,
+            )
 
         # Add TCO results to KPIs
         kpis["tco_per_1000m3"] = tco_results["per_1000m3"]
@@ -531,10 +954,11 @@ def solve_graph(
         # ---------------------------------------------------------------------
         # 7. Generate warnings
         # ---------------------------------------------------------------------
-        result["warnings"].extend(
-            _generate_parameter_warnings(nodes, jar_test_optimum_ppm, jar_test_range)
-        )
-        result["warnings"].extend(generate_kpi_warnings(kpis))
+        if plant_profile != "drinking_water":
+            result["warnings"].extend(
+                _generate_parameter_warnings(nodes, jar_test_optimum_ppm, jar_test_range)
+            )
+            result["warnings"].extend(generate_kpi_warnings(kpis))
 
         # ---------------------------------------------------------------------
         # 8. Build response streams dict
@@ -542,14 +966,37 @@ def solve_graph(
         response_streams: Dict[str, Any] = {}
         if feed_stream:
             response_streams["feed"] = feed_stream.to_dict()
-        if conditioned_stream:
-            response_streams["conditioned"] = conditioned_stream.to_dict()
-        if cake_stream:
-            response_streams["cake"] = cake_stream.to_dict()
-        if liquid_stream:
-            response_streams["liquid"] = liquid_stream.to_dict()
         if pump_stream:
             response_streams["pump_out"] = pump_stream.to_dict()
+
+        if plant_profile == "drinking_water":
+            # Drinking water streams
+            if coagulated_stream:
+                response_streams["coagulated"] = coagulated_stream.to_dict()
+            if flocculated_stream:
+                response_streams["flocculated"] = flocculated_stream.to_dict()
+            if sed_clarified_stream:
+                response_streams["sed_clarified"] = sed_clarified_stream.to_dict()
+            if sed_sludge_stream:
+                response_streams["sed_sludge"] = sed_sludge_stream.to_dict()
+            if daf_clarified_stream:
+                response_streams["daf_clarified"] = daf_clarified_stream.to_dict()
+            if daf_float_stream:
+                response_streams["daf_float"] = daf_float_stream.to_dict()
+            if filtered_stream:
+                response_streams["filtered"] = filtered_stream.to_dict()
+            if backwash_stream:
+                response_streams["backwash"] = backwash_stream.to_dict()
+            if finished_stream:
+                response_streams["finished"] = finished_stream.to_dict()
+        else:
+            # Wastewater streams
+            if conditioned_stream:
+                response_streams["conditioned"] = conditioned_stream.to_dict()
+            if cake_stream:
+                response_streams["cake"] = cake_stream.to_dict()
+            if liquid_stream:
+                response_streams["liquid"] = liquid_stream.to_dict()
 
         # Clarifier streams (optional)
         if clarifier_overflow:

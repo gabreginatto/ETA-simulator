@@ -5,9 +5,13 @@ A Project represents a saved plant configuration that can be
 loaded and modified for repeated simulations.
 """
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Literal
 from pydantic import BaseModel, Field
 import uuid
+
+
+# Plant profile type
+PlantProfileType = Literal["wastewater", "drinking_water"]
 
 
 class FeedSourceParams(BaseModel):
@@ -45,6 +49,12 @@ class PumpParams(BaseModel):
 
 class PlantSettings(BaseModel):
     """Plant operating settings including TCO parameters."""
+
+    # Plant profile - determines available node types and default settings
+    plant_profile: PlantProfileType = Field(
+        default="wastewater",
+        description="Plant profile: wastewater (sludge dewatering) or drinking_water (WTP)"
+    )
 
     # Existing fields
     polymer_price_per_kg: Optional[float] = Field(None, ge=0, description="Polymer cost per kg")
@@ -214,6 +224,7 @@ def get_default_plant_configuration() -> PlantConfiguration:
             }
         },
         settings={
+            "plant_profile": "wastewater",
             "polymer_price_per_kg": None,
             "electricity_price_per_kwh": None,
             "operating_hours_per_day": 24.0,

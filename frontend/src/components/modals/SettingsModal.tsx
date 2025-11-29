@@ -4,10 +4,11 @@
  * Dark glass morphism design.
  */
 import { useState, useEffect } from "react";
-import { X, Settings, Download, ChevronDown, ChevronRight, Info, Sun, Moon } from "lucide-react";
+import { X, Settings, Download, ChevronDown, ChevronRight, Info, Sun, Moon, Factory, Droplet } from "lucide-react";
 import { useStore, useTheme } from "../../store/useStore";
 import { Tooltip } from "../ui/Tooltip";
-import type { PlantSettings } from "../../types";
+import type { PlantSettings, PlantProfile } from "../../types";
+import { PROFILE_PRESETS } from "../../config/profilePresets";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -106,6 +107,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const currentProject = useStore((state) => state.currentProject);
   const theme = useTheme();
   const setTheme = useStore((state) => state.setTheme);
+  const switchProfile = useStore((state) => state.switchProfile);
+
+  // Track current profile from settings (default to wastewater)
+  const currentProfile: PlantProfile = plantConfiguration.settings.plant_profile || "wastewater";
+
+  // Profile switch confirmation state
+  const [pendingProfile, setPendingProfile] = useState<PlantProfile | null>(null);
 
   // Basic settings
   const [polymerPrice, setPolymerPrice] = useState<string>("");
@@ -362,6 +370,87 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </button>
             </div>
           </div>
+
+          {/* Plant Profile Selector */}
+          <div className="border border-glass-border rounded-xl bg-surface-elevated overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 bg-surface-highlight/50 border-b border-glass-border">
+              <Factory className="w-4 h-4 text-content-accent" />
+              <span className="text-sm font-medium text-content-primary">Plant Profile</span>
+            </div>
+            <div className="p-3">
+              <p className="text-xs text-content-subtle mb-3">
+                Switch between plant profiles to load different equipment types and default configurations.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    if (currentProfile !== "wastewater") {
+                      setPendingProfile("wastewater");
+                    }
+                  }}
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all ${
+                    currentProfile === "wastewater"
+                      ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
+                      : "border-glass-border hover:border-orange-300 hover:bg-surface-highlight"
+                  }`}
+                >
+                  <Factory className={`w-6 h-6 ${currentProfile === "wastewater" ? "text-orange-600" : "text-content-subtle"}`} />
+                  <span className={`text-sm font-medium ${currentProfile === "wastewater" ? "text-orange-700 dark:text-orange-400" : "text-content-secondary"}`}>
+                    Wastewater
+                  </span>
+                  <span className="text-xs text-content-subtle text-center">Sludge dewatering</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (currentProfile !== "drinking_water") {
+                      setPendingProfile("drinking_water");
+                    }
+                  }}
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all ${
+                    currentProfile === "drinking_water"
+                      ? "border-cyan-500 bg-cyan-50 dark:bg-cyan-900/20"
+                      : "border-glass-border hover:border-cyan-300 hover:bg-surface-highlight"
+                  }`}
+                >
+                  <Droplet className={`w-6 h-6 ${currentProfile === "drinking_water" ? "text-cyan-600" : "text-content-subtle"}`} />
+                  <span className={`text-sm font-medium ${currentProfile === "drinking_water" ? "text-cyan-700 dark:text-cyan-400" : "text-content-secondary"}`}>
+                    Drinking Water
+                  </span>
+                  <span className="text-xs text-content-subtle text-center">WTP treatment</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Profile Switch Confirmation Dialog */}
+          {pendingProfile && (
+            <div className="border-2 border-amber-500 rounded-xl bg-amber-50 dark:bg-amber-900/20 p-3">
+              <p className="text-sm text-amber-800 dark:text-amber-300 font-medium mb-2">
+                Switch to {PROFILE_PRESETS[pendingProfile].label}?
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
+                This will reset your canvas to the default {PROFILE_PRESETS[pendingProfile].label.toLowerCase()} configuration. Unsaved changes will be lost.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    switchProfile(pendingProfile);
+                    setPendingProfile(null);
+                    onClose();
+                  }}
+                  className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors"
+                >
+                  Switch Profile
+                </button>
+                <button
+                  onClick={() => setPendingProfile(null)}
+                  className="px-3 py-1.5 text-sm text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Basic Settings */}
           <CollapsibleSection

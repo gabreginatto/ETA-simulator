@@ -3,6 +3,9 @@
  * Mirrors backend Pydantic models.
  */
 
+// Plant profile type - determines available node types and default settings
+export type PlantProfile = "wastewater" | "drinking_water";
+
 // Stream data as returned from simulation
 export interface StreamData {
   id: string;
@@ -54,7 +57,47 @@ export interface ThickenerParams {
   capture_rate?: number;
 }
 
+// ============================================
+// Drinking Water Treatment Node Parameters
+// ============================================
+
+export interface CoagulantParams {
+  dose_mg_L: number;
+  coagulant_type?: "alum" | "ferric_chloride" | "pac" | "other";
+}
+
+export interface FlocculatorParams {
+  detention_time_min: number;
+  g_value?: number;  // Velocity gradient (s⁻¹)
+}
+
+export interface SedimentationParams {
+  surface_loading_m3_m2_h?: number;
+  capture_rate: number;  // Fraction of solids removed (0-1)
+}
+
+export interface DAFParams {
+  air_to_solids_ratio?: number;
+  recycle_rate?: number;  // Fraction of flow recycled (0-1)
+  capture_rate: number;   // Fraction of solids removed (0-1)
+}
+
+export interface FilterParams {
+  media_type?: "sand" | "dual_media" | "gac";
+  run_length_h: number;        // Hours until backwash needed
+  loading_rate_m3_m2_h?: number;
+  capture_rate?: number;       // Fraction of remaining solids captured
+}
+
+export interface ClearwellParams {
+  volume_m3: number;
+  contact_time_min?: number;   // CT for disinfection (placeholder)
+}
+
 export interface PlantSettings {
+  // Plant profile
+  plant_profile?: PlantProfile;
+
   // Existing fields
   polymer_price_per_kg?: number;
   electricity_price_per_kwh?: number;
@@ -220,7 +263,12 @@ export interface Project {
 }
 
 // React Flow node data types
-export type EquipmentType = "feed" | "polymer" | "dewatering" | "pump" | "clarifier" | "thickener";
+// Wastewater equipment types
+export type WastewaterEquipmentType = "feed" | "polymer" | "dewatering" | "pump" | "clarifier" | "thickener";
+// Drinking water equipment types
+export type DrinkingWaterEquipmentType = "coagulant" | "flocculator" | "sedimentation" | "daf" | "filter" | "clearwell";
+// Combined equipment type
+export type EquipmentType = WastewaterEquipmentType | DrinkingWaterEquipmentType;
 
 export interface BaseNodeData {
   type: EquipmentType;
@@ -271,13 +319,63 @@ export interface ThickenerNodeData extends BaseNodeData {
   supernatantStreamData?: StreamData;
 }
 
+// ============================================
+// Drinking Water Node Data Types
+// ============================================
+
+export interface CoagulantNodeData extends BaseNodeData {
+  type: "coagulant";
+  parameters: CoagulantParams;
+  streamData?: StreamData;
+  coagulantKgPerH?: number;
+}
+
+export interface FlocculatorNodeData extends BaseNodeData {
+  type: "flocculator";
+  parameters: FlocculatorParams;
+  streamData?: StreamData;
+}
+
+export interface SedimentationNodeData extends BaseNodeData {
+  type: "sedimentation";
+  parameters: SedimentationParams;
+  clarifiedStreamData?: StreamData;
+  sludgeStreamData?: StreamData;
+}
+
+export interface DAFNodeData extends BaseNodeData {
+  type: "daf";
+  parameters: DAFParams;
+  clarifiedStreamData?: StreamData;
+  floatStreamData?: StreamData;
+}
+
+export interface FilterNodeData extends BaseNodeData {
+  type: "filter";
+  parameters: FilterParams;
+  filteredStreamData?: StreamData;
+  backwashStreamData?: StreamData;
+}
+
+export interface ClearwellNodeData extends BaseNodeData {
+  type: "clearwell";
+  parameters: ClearwellParams;
+  streamData?: StreamData;
+}
+
 export type EquipmentNodeData =
   | FeedNodeData
   | PumpNodeData
   | PolymerNodeData
   | DewateringNodeData
   | ClarifierNodeData
-  | ThickenerNodeData;
+  | ThickenerNodeData
+  | CoagulantNodeData
+  | FlocculatorNodeData
+  | SedimentationNodeData
+  | DAFNodeData
+  | FilterNodeData
+  | ClearwellNodeData;
 
 // ============================================
 // Graph types for connection validation
@@ -300,6 +398,7 @@ export interface EquipmentPorts {
 
 // Standard port definitions for equipment types
 export const EQUIPMENT_PORTS: Record<EquipmentType, EquipmentPorts> = {
+  // Wastewater equipment
   feed: {
     inputs: [],
     outputs: [{ id: "output", portType: "sludge", direction: "output", label: "Sludge Out" }],
@@ -332,6 +431,40 @@ export const EQUIPMENT_PORTS: Record<EquipmentType, EquipmentPorts> = {
       { id: "thickened", portType: "sludge", direction: "output", label: "Thickened Out" },
       { id: "supernatant", portType: "liquid", direction: "output", label: "Supernatant" },
     ],
+  },
+  // Drinking water equipment
+  coagulant: {
+    inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Raw Water In" }],
+    outputs: [{ id: "output", portType: "sludge", direction: "output", label: "Coagulated Out" }],
+  },
+  flocculator: {
+    inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Water In" }],
+    outputs: [{ id: "output", portType: "sludge", direction: "output", label: "Flocculated Out" }],
+  },
+  sedimentation: {
+    inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Water In" }],
+    outputs: [
+      { id: "clarified", portType: "sludge", direction: "output", label: "Clarified Out" },
+      { id: "sludge", portType: "sludge", direction: "output", label: "Sludge Out" },
+    ],
+  },
+  daf: {
+    inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Water In" }],
+    outputs: [
+      { id: "clarified", portType: "sludge", direction: "output", label: "Clarified Out" },
+      { id: "float", portType: "sludge", direction: "output", label: "Float Out" },
+    ],
+  },
+  filter: {
+    inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Water In" }],
+    outputs: [
+      { id: "filtered", portType: "sludge", direction: "output", label: "Filtered Out" },
+      { id: "backwash", portType: "sludge", direction: "output", label: "Backwash Waste" },
+    ],
+  },
+  clearwell: {
+    inputs: [{ id: "input", portType: "sludge", direction: "input", label: "Water In" }],
+    outputs: [{ id: "output", portType: "sludge", direction: "output", label: "Finished Water" }],
   },
 };
 
@@ -381,7 +514,19 @@ export interface GraphNode {
   id: string;
   type: EquipmentType;
   data: {
-    parameters: FeedSourceParams | PolymerConditionerParams | DewateringUnitParams | PumpParams | ClarifierParams | ThickenerParams;
+    parameters:
+      | FeedSourceParams
+      | PolymerConditionerParams
+      | DewateringUnitParams
+      | PumpParams
+      | ClarifierParams
+      | ThickenerParams
+      | CoagulantParams
+      | FlocculatorParams
+      | SedimentationParams
+      | DAFParams
+      | FilterParams
+      | ClearwellParams;
   };
 }
 

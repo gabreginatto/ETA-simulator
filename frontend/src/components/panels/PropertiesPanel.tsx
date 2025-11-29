@@ -2,7 +2,20 @@
  * Right sidebar panel for editing equipment properties.
  * Dark glass morphism floating drawer design.
  */
-import { X, Droplets, FlaskConical, Factory, Activity, Layers, CircleDot } from "lucide-react";
+import {
+  X,
+  Droplets,
+  FlaskConical,
+  Factory,
+  Activity,
+  Layers,
+  CircleDot,
+  Wind,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Filter,
+  Container,
+} from "lucide-react";
 import { useStore, useSelectedNode } from "../../store/useStore";
 import { FeedForm } from "../forms/FeedForm";
 import { PumpForm } from "../forms/PumpForm";
@@ -10,6 +23,13 @@ import { PolymerForm } from "../forms/PolymerForm";
 import { DewateringForm } from "../forms/DewateringForm";
 import { ClarifierForm } from "../forms/ClarifierForm";
 import { ThickenerForm } from "../forms/ThickenerForm";
+// Drinking Water Treatment forms
+import { CoagulantForm } from "../forms/CoagulantForm";
+import { FlocculatorForm } from "../forms/FlocculatorForm";
+import { SedimentationForm } from "../forms/SedimentationForm";
+import { DAFForm } from "../forms/DAFForm";
+import { FilterForm } from "../forms/FilterForm";
+import { ClearwellForm } from "../forms/ClearwellForm";
 import type {
   FeedNodeData,
   PumpNodeData,
@@ -17,6 +37,12 @@ import type {
   DewateringNodeData,
   ClarifierNodeData,
   ThickenerNodeData,
+  CoagulantNodeData,
+  FlocculatorNodeData,
+  SedimentationNodeData,
+  DAFNodeData,
+  FilterNodeData,
+  ClearwellNodeData,
 } from "../../types";
 
 export function PropertiesPanel() {
@@ -44,6 +70,7 @@ export function PropertiesPanel() {
   // Determine header style based on equipment type
   const getHeaderStyle = () => {
     switch (nodeData.type) {
+      // Wastewater treatment nodes
       case "feed":
         return {
           icon: <Droplets className="w-5 h-5" />,
@@ -86,6 +113,49 @@ export function PropertiesPanel() {
           accentColor: "bg-viz-thickener",
           textColor: "text-viz-thickener",
         };
+      // Drinking water treatment nodes
+      case "coagulant":
+        return {
+          icon: <Droplets className="w-5 h-5" />,
+          title: "Coagulant Dosing",
+          accentColor: "bg-amber-500",
+          textColor: "text-amber-500",
+        };
+      case "flocculator":
+        return {
+          icon: <Wind className="w-5 h-5" />,
+          title: "Flocculator",
+          accentColor: "bg-indigo-500",
+          textColor: "text-indigo-500",
+        };
+      case "sedimentation":
+        return {
+          icon: <ArrowDownToLine className="w-5 h-5" />,
+          title: "Sedimentation Basin",
+          accentColor: "bg-pink-500",
+          textColor: "text-pink-500",
+        };
+      case "daf":
+        return {
+          icon: <ArrowUpFromLine className="w-5 h-5" />,
+          title: "Dissolved Air Flotation",
+          accentColor: "bg-cyan-500",
+          textColor: "text-cyan-500",
+        };
+      case "filter":
+        return {
+          icon: <Filter className="w-5 h-5" />,
+          title: "Rapid Filter",
+          accentColor: "bg-emerald-500",
+          textColor: "text-emerald-500",
+        };
+      case "clearwell":
+        return {
+          icon: <Container className="w-5 h-5" />,
+          title: "Clearwell",
+          accentColor: "bg-blue-500",
+          textColor: "text-blue-500",
+        };
       default:
         return {
           icon: null,
@@ -121,6 +191,7 @@ export function PropertiesPanel() {
 
       {/* Form Content */}
       <div className="flex-1 overflow-y-auto p-4">
+        {/* Wastewater treatment forms */}
         {nodeData.type === "feed" && (
           <FeedForm
             nodeId={selectedNode.id}
@@ -155,6 +226,43 @@ export function PropertiesPanel() {
           <ThickenerForm
             nodeId={selectedNode.id}
             parameters={(nodeData as ThickenerNodeData).parameters}
+          />
+        )}
+        {/* Drinking water treatment forms */}
+        {nodeData.type === "coagulant" && (
+          <CoagulantForm
+            nodeId={selectedNode.id}
+            parameters={(nodeData as CoagulantNodeData).parameters}
+          />
+        )}
+        {nodeData.type === "flocculator" && (
+          <FlocculatorForm
+            nodeId={selectedNode.id}
+            parameters={(nodeData as FlocculatorNodeData).parameters}
+          />
+        )}
+        {nodeData.type === "sedimentation" && (
+          <SedimentationForm
+            nodeId={selectedNode.id}
+            parameters={(nodeData as SedimentationNodeData).parameters}
+          />
+        )}
+        {nodeData.type === "daf" && (
+          <DAFForm
+            nodeId={selectedNode.id}
+            parameters={(nodeData as DAFNodeData).parameters}
+          />
+        )}
+        {nodeData.type === "filter" && (
+          <FilterForm
+            nodeId={selectedNode.id}
+            parameters={(nodeData as FilterNodeData).parameters}
+          />
+        )}
+        {nodeData.type === "clearwell" && (
+          <ClearwellForm
+            nodeId={selectedNode.id}
+            parameters={(nodeData as ClearwellNodeData).parameters}
           />
         )}
       </div>

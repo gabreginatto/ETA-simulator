@@ -25,6 +25,13 @@ import { PolymerNode } from "./nodes/PolymerNode";
 import { DewateringNode } from "./nodes/DewateringNode";
 import { ClarifierNode } from "./nodes/ClarifierNode";
 import { ThickenerNode } from "./nodes/ThickenerNode";
+// Drinking Water Treatment nodes
+import { CoagulantNode } from "./nodes/CoagulantNode";
+import { FlocculatorNode } from "./nodes/FlocculatorNode";
+import { SedimentationNode } from "./nodes/SedimentationNode";
+import { DAFNode } from "./nodes/DAFNode";
+import { FilterNode } from "./nodes/FilterNode";
+import { ClearwellNode } from "./nodes/ClearwellNode";
 import { StreamEdge } from "./edges/StreamEdge";
 import {
   getPortType,
@@ -34,12 +41,20 @@ import {
 
 // Register custom node types
 const nodeTypes: NodeTypes = {
+  // Wastewater treatment nodes
   feed: FeedNode,
   pump: PumpNode,
   polymer: PolymerNode,
   dewatering: DewateringNode,
   clarifier: ClarifierNode,
   thickener: ThickenerNode,
+  // Drinking water treatment nodes
+  coagulant: CoagulantNode,
+  flocculator: FlocculatorNode,
+  sedimentation: SedimentationNode,
+  daf: DAFNode,
+  filter: FilterNode,
+  clearwell: ClearwellNode,
 };
 
 // Register custom edge types
