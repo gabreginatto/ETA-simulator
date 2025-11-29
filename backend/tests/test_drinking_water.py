@@ -365,6 +365,57 @@ class TestDrinkingWaterTCO:
         tco = kpis["tco_per_1000m3"]
         assert tco["chemicals"] > 0
 
+    def test_filtration_cost_includes_opportunity_cost(self):
+        """Filtration cost includes both backwash water and opportunity costs."""
+        nodes = [
+            {"id": "feed-1", "type": "feed", "data": {"parameters": {"flow_m3_h": 500, "ts_percent": 0.05}}},
+            {"id": "filt-1", "type": "filter", "data": {"parameters": {"media_type": "dual_media", "run_length_h": 24, "capture_rate": 0.95}}},
+        ]
+        edges = [{"id": "e1", "source": "feed-1", "target": "filt-1"}]
+        settings = {
+            "plant_profile": "drinking_water",
+            "filter_runtime_hours_to_clog": 24,  # 24h run = 1 wash/filter/day
+            "filters_in_parallel": 4,
+            "backwash_volume_m3": 10,
+            "backwash_time_hours": 0.5,
+            "filter_flow_m3_h": 50,
+            "water_cost_per_m3": 2,
+            "product_price_per_m3": 5,
+        }
+        result = solve_graph(nodes, edges, settings=settings)
+
+        assert result["success"] is True
+        kpis = result["kpis"]
+
+        # Expected calculation:
+        # washes/day = (24/24) * 4 = 4
+        # water_cost/day = 4 * 10 * 2 = 80
+        # margin = 5 - 2 = 3
+        # opportunity_cost/day = 4 * 0.5 * 50 * 3 = 300
+        # total filtration = 80 + 300 = 380
+
+        tco_per_day = kpis["tco_per_day"]
+        assert abs(tco_per_day["filtration"] - 380) < 1  # Allow small rounding
+
+    def test_filtration_cost_missing_params_warning(self):
+        """Warning is generated when filtration parameters are missing."""
+        nodes = [
+            {"id": "feed-1", "type": "feed", "data": {"parameters": {"flow_m3_h": 500, "ts_percent": 0.05}}},
+            {"id": "filt-1", "type": "filter", "data": {"parameters": {"capture_rate": 0.95}}},
+        ]
+        edges = [{"id": "e1", "source": "feed-1", "target": "filt-1"}]
+        # Missing filtration settings - should generate warning
+        settings = {"plant_profile": "drinking_water"}
+
+        result = solve_graph(nodes, edges, settings=settings)
+
+        assert result["success"] is True
+        # Should have a warning about missing filtration params
+        assert any("Filtration cost not calculated" in w for w in result.get("warnings", []))
+        # Filtration cost should be 0
+        tco_per_day = result["kpis"]["tco_per_day"]
+        assert tco_per_day["filtration"] == 0
+
 
 class TestDrinkingWaterProfileDetection:
     """Test automatic profile detection."""

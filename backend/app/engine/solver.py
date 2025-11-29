@@ -483,18 +483,42 @@ def _compute_drinking_water_tco(
     coagulant_kg_per_h = (coagulant_dose_mg_L * feed_flow) / 1000
     chemical_cost_per_h = coagulant_kg_per_h * coagulant_price
 
-    # Filtration costs (water for backwash)
-    water_cost = settings.get("water_cost_per_m3", 1.5)
-    backwash_volume = settings.get("backwash_volume_m3", 10.0)
-    filter_run_h = settings.get("filter_runtime_hours_to_clog", 24.0)
-    filters_count = settings.get("filters_in_parallel", 4)
+    # Filtration costs (water for backwash + opportunity cost from downtime)
+    water_cost = settings.get("water_cost_per_m3")
+    backwash_volume = settings.get("backwash_volume_m3")
+    filter_run_h = settings.get("filter_runtime_hours_to_clog")
+    filters_count = settings.get("filters_in_parallel")
+    backwash_time_h = settings.get("backwash_time_hours")
+    filter_flow = settings.get("filter_flow_m3_h")
+    product_price = settings.get("product_price_per_m3")
 
-    if filter_run_h and filters_count and backwash_volume:
-        backwash_per_day = (24 / filter_run_h) * filters_count
-        filtration_cost_per_day = backwash_per_day * backwash_volume * water_cost
-    else:
+    # Validate all required filtration parameters
+    missing = [name for name, val in [
+        ("filter_runtime_hours_to_clog", filter_run_h),
+        ("filters_in_parallel", filters_count),
+        ("backwash_volume_m3", backwash_volume),
+        ("backwash_time_hours", backwash_time_h),
+        ("filter_flow_m3_h", filter_flow),
+        ("water_cost_per_m3", water_cost),
+        ("product_price_per_m3", product_price),
+    ] if val is None or val <= 0]
+
+    if missing:
+        warnings.append(f"Filtration cost not calculated: missing {', '.join(missing)}")
         filtration_cost_per_day = 0
-        warnings.append("Filtration cost not calculated: missing filter settings")
+    else:
+        # Washes per day (assumes staggered backwashes, one filter offline at a time)
+        washes_per_day = (24 / filter_run_h) * filters_count
+
+        # Water loss cost
+        backwash_water_cost_per_day = washes_per_day * backwash_volume * water_cost
+
+        # Opportunity cost (lost production margin during downtime)
+        margin_per_m3 = max(product_price - water_cost, 0)  # Clamp negative to 0
+        opportunity_cost_per_day = washes_per_day * backwash_time_h * filter_flow * margin_per_m3
+
+        # Total filtration cost
+        filtration_cost_per_day = backwash_water_cost_per_day + opportunity_cost_per_day
 
     # Sludge disposal costs
     disposal_cost_per_ton = settings.get("disposal_cost_per_ton_wet", 60.0)
