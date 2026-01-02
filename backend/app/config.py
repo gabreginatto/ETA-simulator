@@ -35,6 +35,9 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://127.0.0.1:3000",
+        # Firebase Hosting domains
+        "https://eta-simulator-2026.web.app",
+        "https://eta-simulator-2026.firebaseapp.com",
     ]
 
     # Logging
@@ -47,9 +50,13 @@ class Settings(BaseSettings):
     # Feature flags
     enable_recycles: bool = False  # Enable recycle loop support in solver
 
-    # Auth settings (stub for now)
-    auth_enabled: bool = False
-    auth_token: Optional[str] = None  # Static token for stub auth
+    # Auth settings
+    auth_enabled: bool = False  # Enable in production with IAP
+    auth_token: Optional[str] = None  # Static token for stub auth (development only)
+
+    # IAP (Identity-Aware Proxy) settings for Google Cloud
+    iap_audience: str = ""  # Format: /projects/PROJECT_NUMBER/global/backendServices/SERVICE_ID
+    allowed_domain: str = ""  # e.g., "yourcompany.com" - restrict to Google Workspace domain
 
     model_config = SettingsConfigDict(
         env_file=".env",

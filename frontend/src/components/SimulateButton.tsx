@@ -1,6 +1,5 @@
 /**
  * Prominent simulate button with loading state, validation, and toast feedback.
- * Dark glass morphism design with gradient accents.
  */
 import { useEffect, useCallback, useRef, useState } from "react";
 import { Play, Loader2, AlertCircle, AlertTriangle } from "lucide-react";
@@ -11,9 +10,11 @@ import { useStore, useSimulationResult } from "../store/useStore";
 interface SimulateButtonProps {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
+  /** Compact mode for mobile header */
+  compact?: boolean;
 }
 
-export function SimulateButton({ onSuccess, onError }: SimulateButtonProps) {
+export function SimulateButton({ onSuccess, onError, compact = false }: SimulateButtonProps) {
   const { runSimulation, isSimulating, error, result } = useSimulation();
   const toast = useToast();
   const simulationResult = useSimulationResult();
@@ -105,23 +106,39 @@ export function SimulateButton({ onSuccess, onError }: SimulateButtonProps) {
   // Determine button state and style
   const isDisabled = isSimulating || isValidating || hasErrors;
 
+  const buttonClass = `
+    flex items-center justify-center gap-2
+    ${compact ? "px-4 py-2 text-sm rounded-lg" : "px-6 py-3 rounded-lg"}
+    text-white font-semibold shadow-md
+    transition-all duration-200
+    ${
+      isSimulating
+        ? "bg-blue-400 cursor-not-allowed"
+        : hasErrors
+        ? "bg-red-500 cursor-not-allowed"
+        : hasWarnings
+        ? "bg-amber-500 hover:bg-amber-600 hover:shadow-lg active:scale-[0.98]"
+        : "bg-blue-600 hover:bg-blue-700 hover:shadow-lg active:scale-[0.98]"
+    }
+  `;
+
   // Confirmation dialog for warnings
   if (showConfirm) {
     return (
-      <div className="glass rounded-xl shadow-float p-2 flex items-center gap-2 animate-scale-in">
-        <div className="flex items-center gap-2 px-3 py-1 text-status-warning">
+      <div className="flex items-center gap-2 bg-white rounded-lg shadow-lg p-2 border border-amber-200">
+        <div className="flex items-center gap-2 px-3 py-1 text-amber-700">
           <AlertTriangle className="w-4 h-4" />
           <span className="text-sm">Run with {validationWarnings.length} warning{validationWarnings.length > 1 ? 's' : ''}?</span>
         </div>
         <button
           onClick={handleConfirmSimulate}
-          className="px-3 py-1.5 bg-status-warning text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors"
+          className="px-3 py-1.5 bg-amber-500 text-white text-sm font-medium rounded hover:bg-amber-600 transition-colors"
         >
           Yes, Simulate
         </button>
         <button
           onClick={handleCancelConfirm}
-          className="px-3 py-1.5 bg-surface-highlight text-content-secondary text-sm font-medium rounded-lg hover:bg-surface-elevated transition-colors"
+          className="px-3 py-1.5 bg-slate-100 text-slate-600 text-sm font-medium rounded hover:bg-slate-200 transition-colors"
         >
           Cancel
         </button>
@@ -133,24 +150,7 @@ export function SimulateButton({ onSuccess, onError }: SimulateButtonProps) {
     <button
       onClick={handleClick}
       disabled={isDisabled}
-      className={`
-        flex items-center justify-center gap-2
-        px-6 py-3 rounded-xl
-        font-semibold text-white
-        shadow-float
-        transition-all duration-200
-        animate-slide-up
-        ${
-          isSimulating
-            ? "bg-primary-400/80 cursor-not-allowed"
-            : hasErrors
-            ? "bg-status-error cursor-not-allowed"
-            : hasWarnings
-            ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 hover:shadow-glow-blue active:scale-[0.98]"
-            : "bg-gradient-to-r from-primary-500 to-cyan-400 hover:from-primary-400 hover:to-cyan-300 hover:shadow-glow-cyan active:scale-[0.98]"
-        }
-        focus:outline-none focus:ring-2 focus:ring-primary-400/50 focus:ring-offset-2 focus:ring-offset-surface-canvas
-      `}
+      className={buttonClass}
       title={
         hasErrors
           ? "Fix validation errors before simulating"
@@ -161,30 +161,30 @@ export function SimulateButton({ onSuccess, onError }: SimulateButtonProps) {
     >
       {isSimulating ? (
         <>
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span>Simulating...</span>
+          <Loader2 className={`${compact ? "w-4 h-4" : "w-5 h-5"} animate-spin`} />
+          {!compact && "Simulating..."}
         </>
       ) : hasErrors ? (
         <>
-          <AlertCircle className="w-5 h-5" />
-          <span>Fix Errors</span>
+          <AlertCircle className={compact ? "w-4 h-4" : "w-5 h-5"} />
+          {!compact && "Fix Errors"}
         </>
       ) : hasWarnings ? (
         <>
-          <AlertTriangle className="w-5 h-5" />
-          <span>Simulate</span>
-          {resultWarningCount > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 text-xs bg-white/20 rounded-full">
+          <AlertTriangle className={compact ? "w-4 h-4" : "w-5 h-5"} />
+          {compact ? "Run" : "Simulate"}
+          {resultWarningCount > 0 && !compact && (
+            <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-800 rounded-full">
               {resultWarningCount}
             </span>
           )}
         </>
       ) : (
         <>
-          <Play className="w-5 h-5" />
-          <span>Simulate</span>
-          {resultWarningCount > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 text-xs bg-white/20 rounded-full">
+          <Play className={compact ? "w-4 h-4" : "w-5 h-5"} />
+          {compact ? "Run" : "Simulate"}
+          {resultWarningCount > 0 && !compact && (
+            <span className="ml-1 px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full">
               {resultWarningCount}
             </span>
           )}
