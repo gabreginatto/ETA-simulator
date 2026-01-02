@@ -13,3 +13,52 @@ body {
   min-width: 320px;
   min-height: 100vh;
 }
+
+/* ===== MOBILE SAFE AREA SUPPORT ===== */
+/* Support for devices with notches, home indicators, etc. */
+
+/* Safe area bottom padding for bottom navigation */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Safe area padding for bottom sheet content */
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0));
+}
+
+/* Prevent rubber-banding on iOS */
+.overscroll-contain {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Touch action optimization for mobile */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger touch targets on mobile */
+  button,
+  [role="button"],
+  a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Disable hover states on touch devices */
+  .hover\:bg-surface-highlight:hover {
+    background-color: inherit;
+  }
+
+  /* Active states for touch feedback */
+  button:active,
+  [role="button"]:active {
+    opacity: 0.8;
+  }
+}
+
+/* Mobile-specific text size adjustment */
+@media (max-width: 768px) {
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+  }
+}

@@ -1,5 +1,6 @@
 /**
  * Main App component - SludgeSim application layout.
+ * Supports both desktop and mobile layouts.
  */
 import { useEffect, useState, useCallback } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -16,10 +17,12 @@ import { ValidationBanner } from "./components/ui/ValidationBanner";
 import { SaveProjectModal } from "./components/modals/SaveProjectModal";
 import { LoadProjectModal } from "./components/modals/LoadProjectModal";
 import { SettingsModal } from "./components/modals/SettingsModal";
+import { MobileLayout } from "./components/mobile/MobileLayout";
 import { useStore } from "./store/useStore";
 import { useJarTests } from "./hooks/useJarTests";
 import { useToast } from "./hooks/useToast";
 import { useValidation } from "./hooks/useValidation";
+import { useIsMobile } from "./hooks/useIsMobile";
 
 // Draft persistence key
 const DRAFT_STORAGE_KEY = "sludgesim-draft";
@@ -42,6 +45,7 @@ function AppContent() {
   const initializeDefaultPlant = useStore((state) => state.initializeDefaultPlant);
   const selectNode = useStore((state) => state.selectNode);
   const toast = useToast();
+  const isMobile = useIsMobile();
 
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -154,6 +158,38 @@ function AppContent() {
     toast.success("Loaded", "Project loaded successfully");
   };
 
+  // Render mobile layout for small screens
+  if (isMobile) {
+    return (
+      <>
+        <MobileLayout
+          onOpenSave={handleOpenSave}
+          onOpenLoad={handleOpenLoad}
+          onOpenSettings={handleOpenSettings}
+          onShowShortcuts={handleShowShortcuts}
+          onReset={handleReset}
+        />
+
+        {/* Loading indicator for jar tests */}
+        {jarTestsLoading && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-white px-4 py-2 rounded-full text-sm text-slate-600 shadow-md">
+            Loading jar tests...
+          </div>
+        )}
+
+        {/* Toast notifications */}
+        <ToastContainer toasts={toast.toasts} onRemove={toast.removeToast} />
+
+        {/* Modals - shared between mobile and desktop */}
+        <KeyboardShortcutsModal isOpen={showShortcuts} onClose={handleHideShortcuts} />
+        <SaveProjectModal isOpen={showSaveModal} onClose={handleCloseSave} onSaved={handleSaved} />
+        <LoadProjectModal isOpen={showLoadModal} onClose={handleCloseLoad} onLoaded={handleLoaded} />
+        <SettingsModal isOpen={showSettings} onClose={handleCloseSettings} />
+      </>
+    );
+  }
+
+  // Desktop layout
   return (
     <div className="h-screen flex flex-col bg-slate-100">
       {/* Header */}

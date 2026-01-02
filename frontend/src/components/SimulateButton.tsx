@@ -10,9 +10,11 @@ import { useStore, useSimulationResult } from "../store/useStore";
 interface SimulateButtonProps {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
+  /** Compact mode for mobile header */
+  compact?: boolean;
 }
 
-export function SimulateButton({ onSuccess, onError }: SimulateButtonProps) {
+export function SimulateButton({ onSuccess, onError, compact = false }: SimulateButtonProps) {
   const { runSimulation, isSimulating, error, result } = useSimulation();
   const toast = useToast();
   const simulationResult = useSimulationResult();
@@ -105,8 +107,9 @@ export function SimulateButton({ onSuccess, onError }: SimulateButtonProps) {
   const isDisabled = isSimulating || isValidating || hasErrors;
 
   const buttonClass = `
-    flex items-center justify-center gap-2 px-6 py-3
-    text-white font-semibold rounded-lg shadow-md
+    flex items-center justify-center gap-2
+    ${compact ? "px-4 py-2 text-sm rounded-lg" : "px-6 py-3 rounded-lg"}
+    text-white font-semibold shadow-md
     transition-all duration-200
     ${
       isSimulating
@@ -158,19 +161,19 @@ export function SimulateButton({ onSuccess, onError }: SimulateButtonProps) {
     >
       {isSimulating ? (
         <>
-          <Loader2 className="w-5 h-5 animate-spin" />
-          Simulating...
+          <Loader2 className={`${compact ? "w-4 h-4" : "w-5 h-5"} animate-spin`} />
+          {!compact && "Simulating..."}
         </>
       ) : hasErrors ? (
         <>
-          <AlertCircle className="w-5 h-5" />
-          Fix Errors
+          <AlertCircle className={compact ? "w-4 h-4" : "w-5 h-5"} />
+          {!compact && "Fix Errors"}
         </>
       ) : hasWarnings ? (
         <>
-          <AlertTriangle className="w-5 h-5" />
-          Simulate
-          {resultWarningCount > 0 && (
+          <AlertTriangle className={compact ? "w-4 h-4" : "w-5 h-5"} />
+          {compact ? "Run" : "Simulate"}
+          {resultWarningCount > 0 && !compact && (
             <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-800 rounded-full">
               {resultWarningCount}
             </span>
@@ -178,9 +181,9 @@ export function SimulateButton({ onSuccess, onError }: SimulateButtonProps) {
         </>
       ) : (
         <>
-          <Play className="w-5 h-5" />
-          Simulate
-          {resultWarningCount > 0 && (
+          <Play className={compact ? "w-4 h-4" : "w-5 h-5"} />
+          {compact ? "Run" : "Simulate"}
+          {resultWarningCount > 0 && !compact && (
             <span className="ml-1 px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full">
               {resultWarningCount}
             </span>
